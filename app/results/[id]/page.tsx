@@ -13,10 +13,12 @@ import { UserAnswer } from '@/lib/types/assessment';
 import { calculateScore, formatTime, checkAnswer } from '@/lib/utils/helpers';
 import { QuestionType, MCQQuestion, TrueFalseQuestion, CodingQuestion, MCQAnswer, TrueFalseAnswer, CodingAnswer } from '@/lib/types/question';
 import { CheckCircle2, XCircle, Award, Clock, FileText, ArrowLeft } from 'lucide-react';
+import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function ResultsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const assessment = getAssessmentById(id);
 
   const [result, setResult] = useState<{
@@ -25,12 +27,21 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
   } | null>(null);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+
     // Load result from sessionStorage
     const resultData = sessionStorage.getItem(`assessment_result_${id}`);
     if (resultData) {
       setResult(JSON.parse(resultData));
     }
-  }, [id]);
+  }, [id, isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   if (!assessment || !result) {
     return (

@@ -1,15 +1,40 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight, Code, Clock, CheckCircle, Award } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowRight, Code, Clock, CheckCircle, Award, User } from "lucide-react";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 export default function Home() {
+  const { isAuthenticated, user } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null; // Will redirect to login
+  }
+
   return (
     <div className="container mx-auto px-4 py-12">
       {/* Hero Section */}
       <section className="text-center space-y-6 py-12 md:py-20">
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <Badge variant="secondary" className="text-lg px-4 py-2 gap-2">
+            <User className="w-5 h-5" />
+            Welcome, {user?.name}!
+          </Badge>
+        </div>
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-          Welcome to <span className="text-primary">AssessHub</span>
+          Ready for <span className="text-primary">Your Assessment</span>?
         </h1>
         <p className="text-xl md:text-2xl text-muted-foreground max-w-3xl mx-auto">
           Test your knowledge with interactive assessments featuring multiple question types,

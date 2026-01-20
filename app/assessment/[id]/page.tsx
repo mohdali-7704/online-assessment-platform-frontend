@@ -13,16 +13,25 @@ import { getAssessmentById } from '@/data/mock-assessments';
 import { UserAnswer } from '@/lib/types/assessment';
 import { Answer } from '@/lib/types/question';
 import { ChevronLeft, ChevronRight, Flag } from 'lucide-react';
+import { useAuth } from '@/lib/auth/AuthContext';
 
 export default function AssessmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const assessment = getAssessmentById(id);
 
+  // All hooks must be called before any conditional returns
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<UserAnswer[]>([]);
   const [startTime] = useState(Date.now());
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, router]);
 
   useEffect(() => {
     if (!assessment) return;
@@ -35,6 +44,11 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
     }));
     setUserAnswers(initialAnswers);
   }, [assessment]);
+
+  // Conditional returns after all hooks
+  if (!isAuthenticated) {
+    return null;
+  }
 
   if (!assessment) {
     return (

@@ -1,8 +1,25 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import AssessmentCard from "@/components/AssessmentCard";
 import { getAllAssessments } from "@/data/mock-assessments";
+import { useAuth } from "@/lib/auth/AuthContext";
 
 export default function AssessmentsPage() {
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
   const assessments = getAllAssessments();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <div className="container mx-auto px-4 py-12">
