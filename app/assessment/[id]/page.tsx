@@ -12,6 +12,7 @@ import QuestionRenderer from '@/components/assessment/QuestionRenderer';
 import { getAssessmentById } from '@/data/mock-assessments';
 import { UserAnswer } from '@/lib/types/assessment';
 import { Answer } from '@/lib/types/question';
+import { QuestionType } from '@/lib/types/question';
 import { ChevronLeft, ChevronRight, Flag } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 
@@ -93,11 +94,21 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
   const handleSubmit = () => {
     const timeTaken = Math.floor((Date.now() - startTime) / 1000);
 
+    // Filter coding answers and extract scores
+    const codingScores: { [key: string]: number } = {};
+    userAnswers.forEach(ua => {
+      const question = assessment.questions.find(q => q.id === ua.questionId);
+      if (question?.type === QuestionType.CODING && (ua.answer as any)._score !== undefined) {
+        codingScores[ua.questionId] = (ua.answer as any)._score;
+      }
+    });
+
     // Store results in sessionStorage for the results page
     sessionStorage.setItem(`assessment_result_${id}`, JSON.stringify({
       assessmentId: id,
       userAnswers,
-      timeTaken
+      timeTaken,
+      codingScores  // Include coding scores
     }));
 
     router.push(`/results/${id}`);
@@ -161,6 +172,7 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
             question={currentQuestion}
             answer={currentAnswer?.answer}
             onChange={handleAnswerChange}
+            assessmentId={id}
           />
 
           {/* Navigation Buttons */}

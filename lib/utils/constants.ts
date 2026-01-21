@@ -3,6 +3,9 @@ export const JUDGE0_API_URL = process.env.NEXT_PUBLIC_JUDGE0_API_URL || 'https:/
 export const JUDGE0_API_KEY = process.env.NEXT_PUBLIC_JUDGE0_API_KEY || '';
 export const RAPIDAPI_HOST = process.env.NEXT_PUBLIC_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
 
+// Backend API Configuration
+export const BACKEND_API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+
 // Language IDs for Judge0 API
 export const LANGUAGE_IDS: { [key: string]: number } = {
   javascript: 63, // Node.js

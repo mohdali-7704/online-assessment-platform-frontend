@@ -10,9 +10,10 @@ interface QuestionRendererProps {
   question: Question;
   answer: Answer | undefined;
   onChange: (answer: Answer) => void;
+  assessmentId: string;
 }
 
-export default function QuestionRenderer({ question, answer, onChange }: QuestionRendererProps) {
+export default function QuestionRenderer({ question, answer, onChange, assessmentId }: QuestionRendererProps) {
   switch (question.type) {
     case QuestionType.MCQ:
       return (
@@ -47,6 +48,7 @@ export default function QuestionRenderer({ question, answer, onChange }: Questio
           question={question}
           answer={(answer as CodingAnswer) || { code: question.starterCode[question.allowedLanguages[0]] || '', language: question.allowedLanguages[0] }}
           onChange={onChange}
+          assessmentId={assessmentId}
         />
       );
 

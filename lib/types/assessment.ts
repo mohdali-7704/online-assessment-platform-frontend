@@ -16,6 +16,9 @@ export interface UserAnswer {
   questionId: string;
   answer: Answer;
   isAnswered: boolean;
+  // Coding-specific fields
+  codingScore?: number;  // Score returned from backend
+  testResults?: TestCaseResult[];  // Store test results
 }
 
 // Assessment result

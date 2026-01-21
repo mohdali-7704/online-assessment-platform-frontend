@@ -61,7 +61,8 @@ export function checkAnswer(question: Question, answer: Answer): boolean {
  */
 export function calculateScore(
   questions: Question[],
-  userAnswers: UserAnswer[]
+  userAnswers: UserAnswer[],
+  codingScores?: { [key: string]: number }  // Add this parameter
 ): { score: number; totalPoints: number; percentage: number } {
   let score = 0;
   let totalPoints = 0;
@@ -72,7 +73,11 @@ export function calculateScore(
     const userAnswer = userAnswers.find(ua => ua.questionId === question.id);
 
     if (userAnswer && userAnswer.isAnswered) {
-      if (checkAnswer(question, userAnswer.answer)) {
+      if (question.type === QuestionType.CODING && codingScores && codingScores[question.id] !== undefined) {
+        // Use backend-calculated score for coding questions
+        score += codingScores[question.id];
+      } else if (checkAnswer(question, userAnswer.answer)) {
+        // Use checkAnswer for other question types
         score += question.points;
       }
     }

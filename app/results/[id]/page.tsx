@@ -14,6 +14,7 @@ import { calculateScore, formatTime, checkAnswer } from '@/lib/utils/helpers';
 import { QuestionType, MCQQuestion, TrueFalseQuestion, CodingQuestion, MCQAnswer, TrueFalseAnswer, CodingAnswer } from '@/lib/types/question';
 import { CheckCircle2, XCircle, Award, Clock, FileText, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import CodeOutputPanel from '@/components/code-editor/CodeOutputPanel';
 
 export default function ResultsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -25,6 +26,7 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
     userAnswers: UserAnswer[];
     timeTaken: number;
   } | null>(null);
+  const [codingScores, setCodingScores] = useState<{ [key: string]: number }>({});
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -35,7 +37,9 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
     // Load result from sessionStorage
     const resultData = sessionStorage.getItem(`assessment_result_${id}`);
     if (resultData) {
-      setResult(JSON.parse(resultData));
+      const parsed = JSON.parse(resultData);
+      setResult(parsed);
+      setCodingScores(parsed.codingScores || {});
     }
   }, [id, isAuthenticated, router]);
 
@@ -55,7 +59,7 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
     );
   }
 
-  const { score, totalPoints, percentage } = calculateScore(assessment.questions, result.userAnswers);
+  const { score, totalPoints, percentage } = calculateScore(assessment.questions, result.userAnswers, codingScores);
   const isPassed = percentage >= 60;
 
   return (
@@ -255,9 +259,36 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
                           </pre>
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground italic">
-                        Coding questions are evaluated based on test case execution
-                      </p>
+
+                      {/* Display score if available */}
+                      {codingScores[question.id] !== undefined && (
+                        <div className="p-4 bg-muted rounded-md">
+                          <div className="font-semibold mb-1">Score</div>
+                          <div className="text-lg">
+                            {codingScores[question.id].toFixed(1)} / {question.points} points
+                            <span className="text-sm text-muted-foreground ml-2">
+                              ({Math.round((codingScores[question.id] / question.points) * 100)}%)
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Display test results if available */}
+                      {(userAnswer.answer as any)._testResults && (
+                        <div>
+                          <div className="font-semibold mb-2">Test Results:</div>
+                          <CodeOutputPanel
+                            results={(userAnswer.answer as any)._testResults}
+                            isLoading={false}
+                          />
+                        </div>
+                      )}
+
+                      {!codingScores[question.id] && !(userAnswer.answer as any)._testResults && (
+                        <p className="text-sm text-muted-foreground italic">
+                          Coding questions are evaluated based on test case execution
+                        </p>
+                      )}
                     </div>
                   )}
 

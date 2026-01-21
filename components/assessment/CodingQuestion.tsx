@@ -10,14 +10,16 @@ import MonacoEditor from '@/components/code-editor/MonacoEditor';
 import CodeOutputPanel from '@/components/code-editor/CodeOutputPanel';
 import { Play } from 'lucide-react';
 import { runTestCases } from '@/lib/api/judge0';
+import { scoreCodingQuestion } from '@/lib/api/scoring';
 
 interface CodingQuestionProps {
   question: CodingQuestionType;
   answer: CodingAnswer;
   onChange: (answer: CodingAnswer) => void;
+  assessmentId: string;
 }
 
-export default function CodingQuestion({ question, answer, onChange }: CodingQuestionProps) {
+export default function CodingQuestion({ question, answer, onChange, assessmentId }: CodingQuestionProps) {
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<any[]>([]);
   const [error, setError] = useState<string | undefined>();
@@ -42,26 +44,59 @@ export default function CodingQuestion({ question, answer, onChange }: CodingQue
     setTestResults([]);
 
     try {
-      // Only run visible test cases
-      const visibleTestCases = question.testCases
-        .filter(tc => !tc.isHidden)
-        .map(tc => ({
-          input: tc.input,
-          expectedOutput: tc.expectedOutput
-        }));
+      // Get ALL test cases (including hidden ones) for execution and scoring
+      const allTestCases = question.testCases;
 
       // Extract function name from the code
       const functionNameMatch = answer.code.match(/function\s+(\w+)\s*\(|def\s+(\w+)\s*\(|int\s+(\w+)\s*\(|public\s+static\s+\w+\s+(\w+)\s*\(/);
       const functionName = functionNameMatch ? (functionNameMatch[1] || functionNameMatch[2] || functionNameMatch[3] || functionNameMatch[4]) : undefined;
 
-      const results = await runTestCases(answer.code, answer.language, visibleTestCases, functionName);
-
-      setTestResults(
-        results.map((result, index) => ({
-          testCaseId: question.testCases[index].id,
-          ...result
-        }))
+      // Run ALL tests via Judge0 (including hidden ones)
+      const results = await runTestCases(
+        answer.code,
+        answer.language,
+        allTestCases.map(tc => ({
+          input: tc.input,
+          expectedOutput: tc.expectedOutput
+        })),
+        functionName
       );
+
+      // Map results with test case IDs
+      const allResultsWithIds = results.map((result, index) => ({
+        ...result,
+        testCaseId: allTestCases[index].id
+      }));
+
+      // Only show visible test case results in UI
+      const visibleResults = allResultsWithIds.filter((_, index) => !allTestCases[index].isHidden);
+      setTestResults(visibleResults);
+
+      // Submit to backend for scoring with ALL test results
+      try {
+        const scoreResponse = await scoreCodingQuestion({
+          questionId: question.id,
+          assessmentId,
+          code: answer.code,
+          language: answer.language,
+          testResults: allResultsWithIds,  // Send all results including hidden
+          totalTestCases: question.testCases.length,
+          questionPoints: question.points
+        });
+
+        console.log('Coding Score:', scoreResponse);
+
+        // Update answer with score (via onChange callback)
+        onChange({
+          ...answer,
+          // Store score in a way parent component can access
+          _score: scoreResponse.score,
+          _testResults: allResultsWithIds  // Store all results
+        } as any);
+      } catch (scoreError) {
+        console.error('Failed to get score from backend:', scoreError);
+        // Continue even if scoring fails - user can still see test results
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to run code');
     } finally {
