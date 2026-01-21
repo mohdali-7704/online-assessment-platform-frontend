@@ -100,12 +100,101 @@ export async function submitAndGetResult(
 }
 
 /**
+ * Wrap user code with stdin reading and function calling logic
+ */
+function wrapCodeWithStdin(code: string, language: string, functionName: string): string {
+  // Extract function name from code if not provided
+  if (!functionName) {
+    const match = code.match(/function\s+(\w+)\s*\(|def\s+(\w+)\s*\(|int\s+(\w+)\s*\(|public\s+static\s+\w+\s+(\w+)\s*\(/);
+    functionName = match ? (match[1] || match[2] || match[3] || match[4]) : 'solution';
+  }
+
+  switch (language.toLowerCase()) {
+    case 'javascript':
+      return `${code}
+
+// Read from stdin and call the function
+const input = require('fs').readFileSync(0, 'utf-8').trim();
+const arr = JSON.parse(input);
+const result = ${functionName}(arr);
+console.log(result);`;
+
+    case 'python':
+      return `${code}
+
+# Read from stdin and call the function
+import sys
+import json
+input_data = sys.stdin.read().strip()
+arr = json.loads(input_data)
+result = ${functionName}(arr)
+print(result)`;
+
+    case 'cpp':
+      // For C++, we can't easily parse JSON, so we'll expect space-separated numbers
+      return `${code}
+
+#include <iostream>
+#include <sstream>
+#include <vector>
+using namespace std;
+
+int main() {
+    string line;
+    getline(cin, line);
+
+    // Remove brackets and parse numbers
+    line.erase(remove(line.begin(), line.end(), '['), line.end());
+    line.erase(remove(line.begin(), line.end(), ']'), line.end());
+
+    vector<int> arr;
+    stringstream ss(line);
+    int num;
+    char comma;
+    while (ss >> num) {
+        arr.push_back(num);
+        ss >> comma; // skip comma
+    }
+
+    cout << ${functionName}(arr) << endl;
+    return 0;
+}`;
+
+    case 'java':
+      return `${code}
+
+import java.util.*;
+
+public class Main {
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        String input = sc.nextLine().trim();
+
+        // Remove brackets and split by comma
+        input = input.replace("[", "").replace("]", "");
+        String[] parts = input.split(",");
+        int[] arr = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            arr[i] = Integer.parseInt(parts[i].trim());
+        }
+
+        System.out.println(Solution.${functionName}(arr));
+    }
+}`;
+
+    default:
+      return code;
+  }
+}
+
+/**
  * Run code against test cases
  */
 export async function runTestCases(
   code: string,
   language: string,
-  testCases: Array<{ input: string; expectedOutput: string }>
+  testCases: Array<{ input: string; expectedOutput: string }>,
+  functionName?: string
 ): Promise<Array<{
   passed: boolean;
   actualOutput: string;
@@ -115,9 +204,12 @@ export async function runTestCases(
 }>> {
   const results = [];
 
+  // Wrap the code to read from stdin and call the function
+  const wrappedCode = wrapCodeWithStdin(code, language, functionName || '');
+
   for (const testCase of testCases) {
     try {
-      const result = await submitAndGetResult(code, language, testCase.input);
+      const result = await submitAndGetResult(wrappedCode, language, testCase.input);
 
       const actualOutput = (result.stdout || '').trim();
       const expectedOutput = testCase.expectedOutput.trim();

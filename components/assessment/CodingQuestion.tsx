@@ -50,7 +50,11 @@ export default function CodingQuestion({ question, answer, onChange }: CodingQue
           expectedOutput: tc.expectedOutput
         }));
 
-      const results = await runTestCases(answer.code, answer.language, visibleTestCases);
+      // Extract function name from the code
+      const functionNameMatch = answer.code.match(/function\s+(\w+)\s*\(|def\s+(\w+)\s*\(|int\s+(\w+)\s*\(|public\s+static\s+\w+\s+(\w+)\s*\(/);
+      const functionName = functionNameMatch ? (functionNameMatch[1] || functionNameMatch[2] || functionNameMatch[3] || functionNameMatch[4]) : undefined;
+
+      const results = await runTestCases(answer.code, answer.language, visibleTestCases, functionName);
 
       setTestResults(
         results.map((result, index) => ({

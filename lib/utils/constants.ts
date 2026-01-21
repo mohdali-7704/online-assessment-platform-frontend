@@ -1,6 +1,7 @@
 // Judge0 API Configuration
-export const JUDGE0_API_URL = 'https://judge0-ce.p.rapidapi.com';
+export const JUDGE0_API_URL = process.env.NEXT_PUBLIC_JUDGE0_API_URL || 'https://judge0-ce.p.rapidapi.com';
 export const JUDGE0_API_KEY = process.env.NEXT_PUBLIC_JUDGE0_API_KEY || '';
+export const RAPIDAPI_HOST = process.env.NEXT_PUBLIC_RAPIDAPI_HOST || 'judge0-ce.p.rapidapi.com';
 
 // Language IDs for Judge0 API
 export const LANGUAGE_IDS: { [key: string]: number } = {

@@ -1,13 +1,13 @@
 import axios from 'axios';
-import { JUDGE0_API_URL, JUDGE0_API_KEY } from '../utils/constants';
+import { JUDGE0_API_URL, JUDGE0_API_KEY, RAPIDAPI_HOST } from '../utils/constants';
 
-// Create axios instance for Judge0 API
+// Create axios instance for Judge0 API (RapidAPI)
 export const judge0Client = axios.create({
   baseURL: JUDGE0_API_URL,
   headers: {
     'Content-Type': 'application/json',
-    'X-RapidAPI-Key': JUDGE0_API_KEY,
-    'X-RapidAPI-Host': 'judge0-ce.p.rapidapi.com'
+    'x-rapidapi-key': JUDGE0_API_KEY,
+    'x-rapidapi-host': RAPIDAPI_HOST
   }
 });
 
