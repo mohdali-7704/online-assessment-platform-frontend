@@ -14,11 +14,22 @@ interface MCQQuestionProps {
 }
 
 export default function MCQQuestion({ question, answer, onChange }: MCQQuestionProps) {
+  console.log('[MCQQuestion] Render:', {
+    questionId: question.id,
+    questionText: question.text,
+    multipleAnswers: question.multipleAnswers,
+    answer: answer,
+    answerType: typeof answer,
+    isArray: Array.isArray(answer)
+  });
+
   const handleSingleChoiceChange = (value: string) => {
+    console.log('[MCQQuestion] Single choice changed:', value);
     onChange([value]);
   };
 
   const handleMultipleChoiceChange = (optionId: string, checked: boolean) => {
+    console.log('[MCQQuestion] Multiple choice changed:', { optionId, checked });
     if (checked) {
       onChange([...answer, optionId]);
     } else {
@@ -27,6 +38,7 @@ export default function MCQQuestion({ question, answer, onChange }: MCQQuestionP
   };
 
   const handleClear = () => {
+    console.log('[MCQQuestion] Clear clicked');
     onChange([]);
   };
 

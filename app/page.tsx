@@ -10,17 +10,19 @@ import { ArrowRight, Code, Clock, CheckCircle, Award, User } from "lucide-react"
 import { useAuth } from "@/lib/auth/AuthContext";
 
 export default function Home() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isAdmin } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/login');
+    } else if (isAdmin) {
+      router.push('/admin');
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isAdmin, router]);
 
-  if (!isAuthenticated) {
-    return null; // Will redirect to login
+  if (!isAuthenticated || isAdmin) {
+    return null; // Will redirect
   }
 
   return (

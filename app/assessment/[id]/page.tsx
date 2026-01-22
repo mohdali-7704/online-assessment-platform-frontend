@@ -37,14 +37,24 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
   useEffect(() => {
     if (!assessment) return;
 
+    console.log('[Assessment] Initializing answers for assessment:', assessment.id);
+    console.log('[Assessment] Questions:', assessment.questions);
+
     // Initialize user answers
-    const initialAnswers: UserAnswer[] = assessment.questions.map(q => ({
-      questionId: q.id,
-      answer: q.type === 'mcq' ? [] : q.type === 'coding' ? { code: q.starterCode[q.allowedLanguages[0]] || '', language: q.allowedLanguages[0] } : q.type === 'descriptive' ? '' : undefined,
-      isAnswered: false
-    }));
+    const initialAnswers: UserAnswer[] = assessment.questions.map(q => {
+      const answer = q.type === 'mcq' ? [] : q.type === 'coding' ? { code: q.starterCode[q.allowedLanguages[0]] || '', language: q.allowedLanguages[0] } : q.type === 'descriptive' ? '' : undefined;
+      console.log(`[Assessment] Question ${q.id} (${q.type}):`, { answer, isArray: Array.isArray(answer) });
+      return {
+        questionId: q.id,
+        answer,
+        isAnswered: false
+      };
+    });
+
+    console.log('[Assessment] Initial answers:', initialAnswers);
     setUserAnswers(initialAnswers);
-  }, [assessment]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]); // Use id instead of assessment to avoid infinite loop
 
   // Conditional returns after all hooks
   if (!isAuthenticated) {
@@ -58,6 +68,15 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
         <Button onClick={() => router.push('/assessments')} className="mt-4">
           Back to Assessments
         </Button>
+      </div>
+    );
+  }
+
+  // Wait for userAnswers to be initialized before rendering
+  if (userAnswers.length === 0) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <p>Loading assessment...</p>
       </div>
     );
   }

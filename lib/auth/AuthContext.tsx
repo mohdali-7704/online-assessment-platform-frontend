@@ -2,11 +2,14 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
-interface User {
+export type UserRole = 'admin' | 'user';
+
+export interface User {
   id: string;
   username: string;
   name: string;
   email: string;
+  role: UserRole;
 }
 
 interface AuthContextType {
@@ -14,6 +17,7 @@ interface AuthContextType {
   login: (username: string, password: string) => boolean;
   logout: () => void;
   isAuthenticated: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,21 +29,24 @@ const MOCK_USERS = [
     username: 'john',
     password: 'john123',
     name: 'John Doe',
-    email: 'john@example.com'
+    email: 'john@example.com',
+    role: 'user' as UserRole
   },
   {
     id: '2',
     username: 'jane',
     password: 'jane123',
     name: 'Jane Smith',
-    email: 'jane@example.com'
+    email: 'jane@example.com',
+    role: 'user' as UserRole
   },
   {
     id: '3',
     username: 'admin',
     password: 'admin123',
     name: 'Admin User',
-    email: 'admin@example.com'
+    email: 'admin@example.com',
+    role: 'admin' as UserRole
   }
 ];
 
@@ -64,7 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         id: foundUser.id,
         username: foundUser.username,
         name: foundUser.name,
-        email: foundUser.email
+        email: foundUser.email,
+        role: foundUser.role
       };
       setUser(user);
       localStorage.setItem('user', JSON.stringify(user));
@@ -79,8 +87,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('user');
   };
 
+  const isAdmin = user?.role === 'admin';
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

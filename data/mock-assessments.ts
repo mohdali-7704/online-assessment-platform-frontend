@@ -1,5 +1,7 @@
 import { Assessment, QuestionType } from '@/lib/types/question';
 
+// Original mock assessments - keeping this as the main export for now
+// TODO: Migrate to normalized structure after testing
 export const mockAssessments: Assessment[] = [
   {
     id: '1',
@@ -432,11 +434,28 @@ Output: 1, 2, Fizz, 4, Buzz, Fizz, 7, 8, Fizz, Buzz, 11, Fizz, 13, 14, FizzBuzz
 ];
 
 // Helper function to get assessment by ID
-export function getAssessmentById(id: string): Assessment | undefined {
-  return mockAssessments.find(assessment => assessment.id === id);
+// Helper function to get custom assessments from localStorage
+function getCustomAssessments(): Assessment[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const stored = localStorage.getItem('custom_assessments');
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error loading custom assessments:', error);
+    return [];
+  }
 }
 
-// Helper function to get all assessments
+export function getAssessmentById(id: string): Assessment | undefined {
+  const allAssessments = getAllAssessments();
+  return allAssessments.find(assessment => assessment.id === id);
+}
+
+// Helper function to get all assessments (mock + custom)
 export function getAllAssessments(): Assessment[] {
-  return mockAssessments;
+  const customAssessments = getCustomAssessments();
+  return [...mockAssessments, ...customAssessments];
 }

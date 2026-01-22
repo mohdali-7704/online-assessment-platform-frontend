@@ -29,7 +29,18 @@ export default function LoginPage() {
     const success = login(username, password);
 
     if (success) {
-      router.push('/');
+      // Check user role after login
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        if (userData.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/');
+        }
+      } else {
+        router.push('/');
+      }
     } else {
       setError('Invalid username or password');
     }
@@ -41,7 +52,18 @@ export default function LoginPage() {
 
     const success = login(demoUsername, demoPassword);
     if (success) {
-      router.push('/');
+      // Check user role after login
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        const userData = JSON.parse(storedUser);
+        if (userData.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/');
+        }
+      } else {
+        router.push('/');
+      }
     }
   };
 
