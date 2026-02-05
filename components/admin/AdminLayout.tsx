@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth/AuthContext';
-import { LayoutDashboard, FileText, Users, LogOut, Settings } from 'lucide-react';
+import { LayoutDashboard, FileText, Users, LogOut, Settings, Database } from 'lucide-react';
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -25,6 +25,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const navItems = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/assessments', label: 'Assessments', icon: FileText },
+    { href: '/admin/question-bank', label: 'Question Bank', icon: Database },
     { href: '/admin/users', label: 'Users', icon: Users },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
   ];

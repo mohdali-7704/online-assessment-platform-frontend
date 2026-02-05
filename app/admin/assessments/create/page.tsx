@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import AdminRoute from '@/components/auth/AdminRoute';
 import AdminLayout from '@/components/admin/AdminLayout';
@@ -12,22 +12,43 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { ArrowLeft, Plus, Trash2, Save } from 'lucide-react';
-import { QuestionType } from '@/lib/types/question';
+import { ArrowLeft, Plus, Trash2, Save, Database, Search, GripVertical, MoveUp, MoveDown } from 'lucide-react';
+import { QuestionType, QuestionDifficulty } from '@/lib/types/question';
 import type { Question, MCQQuestion, TrueFalseQuestion, DescriptiveQuestion, CodingQuestion, TestCase, MCQOption } from '@/lib/types/question';
-import type { Assessment } from '@/lib/types/assessment';
-import { generateStarterCode, suggestFunctionName, generateAllStarterCode, detectFunctionSignature } from '@/lib/utils/code-templates';
+import type { Assessment, AssessmentSection } from '@/lib/types/assessment';
+import { generateStarterCode, generateAllStarterCode, detectFunctionSignature } from '@/lib/utils/code-templates';
+import { questionBankService, PREDEFINED_TOPICS, PREDEFINED_DOMAINS } from '@/lib/services/questionBankService';
+import { Badge } from '@/components/ui/badge';
 
 export default function CreateAssessmentPage() {
   const router = useRouter();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [duration, setDuration] = useState(30);
-  const [questions, setQuestions] = useState<Question[]>([]);
+
+  // Sections State
+  const [sections, setSections] = useState<AssessmentSection[]>([
+    {
+      id: 's1',
+      name: 'Section 1',
+      questionType: QuestionType.MCQ,
+      duration: 15,
+      questions: []
+    }
+  ]);
+  const [currentSectionId, setCurrentSectionId] = useState<string>('s1');
 
   const [showQuestionForm, setShowQuestionForm] = useState(false);
-  const [currentQuestionType, setCurrentQuestionType] = useState<QuestionType>(QuestionType.MCQ);
+  const [showQuestionBank, setShowQuestionBank] = useState(false);
+
+  // Question Bank State
+  const [bankQuestions, setBankQuestions] = useState<Question[]>([]);
+  const [filteredBankQuestions, setFilteredBankQuestions] = useState<Question[]>([]);
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [difficultyFilter, setDifficultyFilter] = useState<string>('all');
+  const [topicFilter, setTopicFilter] = useState<string>('all');
+  const [domainFilter, setDomainFilter] = useState<string>('all');
 
   // MCQ State
   const [mcqText, setMcqText] = useState('');
@@ -66,8 +87,73 @@ export default function CreateAssessmentPage() {
   const [codingAllowedLanguages, setCodingAllowedLanguages] = useState<string[]>(['javascript', 'python']);
   const [showAdvancedLanguages, setShowAdvancedLanguages] = useState(false);
 
+  // Section Management Functions
+  const addSection = () => {
+    const newId = `s${sections.length + 1}`;
+    const newSection: AssessmentSection = {
+      id: newId,
+      name: `Section ${sections.length + 1}`,
+      questionType: QuestionType.MCQ,
+      duration: 15,
+      questions: []
+    };
+    setSections([...sections, newSection]);
+    setCurrentSectionId(newId);
+  };
+
+  const removeSection = (sectionId: string) => {
+    if (sections.length === 1) {
+      alert('You must have at least one section.');
+      return;
+    }
+    const filtered = sections.filter(s => s.id !== sectionId);
+    setSections(filtered);
+    if (currentSectionId === sectionId) {
+      setCurrentSectionId(filtered[0].id);
+    }
+  };
+
+  const updateSection = (sectionId: string, updates: Partial<AssessmentSection>) => {
+    setSections(sections.map(s => s.id === sectionId ? { ...s, ...updates } : s));
+  };
+
+  const moveSectionUp = (index: number) => {
+    if (index === 0) return;
+    const newSections = [...sections];
+    [newSections[index - 1], newSections[index]] = [newSections[index], newSections[index - 1]];
+    setSections(newSections);
+  };
+
+  const moveSectionDown = (index: number) => {
+    if (index === sections.length - 1) return;
+    const newSections = [...sections];
+    [newSections[index], newSections[index + 1]] = [newSections[index + 1], newSections[index]];
+    setSections(newSections);
+  };
+
+  const getCurrentSection = () => sections.find(s => s.id === currentSectionId);
+
+  const addQuestionToSection = (question: Question) => {
+    const section = getCurrentSection();
+    if (!section) return;
+
+    updateSection(section.id, {
+      questions: [...section.questions, question]
+    });
+  };
+
+  const removeQuestionFromSection = (sectionId: string, questionId: string) => {
+    const section = sections.find(s => s.id === sectionId);
+    if (!section) return;
+
+    updateSection(sectionId, {
+      questions: section.questions.filter(q => q.id !== questionId)
+    });
+  };
+
+  // Question Form Functions
   const addMcqOption = () => {
-    const newId = String.fromCharCode(97 + mcqOptions.length); // a, b, c, d, ...
+    const newId = String.fromCharCode(97 + mcqOptions.length);
     setMcqOptions([...mcqOptions, { id: newId, text: '' }]);
   };
 
@@ -114,22 +200,18 @@ export default function CreateAssessmentPage() {
   };
 
   const handleAutoGenerateStarterCode = () => {
-    // Detect function signature from problem statement or title
     const signature = detectFunctionSignature(codingProblemStatement || codingText);
-
     if (!signature) {
       alert('Could not detect function signature. Please provide more details in the problem statement.');
       return;
     }
 
-    // Generate starter code for primary language
     const primaryCode = generateStarterCode(
       codingPrimaryLanguage,
       signature.name,
       signature.parameters
     );
 
-    // Generate for all allowed languages
     const allCodes = generateAllStarterCode(
       codingPrimaryLanguage,
       primaryCode,
@@ -146,8 +228,6 @@ export default function CreateAssessmentPage() {
 
   const handlePrimaryLanguageChange = (lang: string) => {
     setCodingPrimaryLanguage(lang);
-
-    // Ensure primary language is in allowed languages
     if (!codingAllowedLanguages.includes(lang)) {
       setCodingAllowedLanguages([lang, ...codingAllowedLanguages]);
     }
@@ -186,12 +266,18 @@ export default function CreateAssessmentPage() {
   };
 
   const addQuestion = () => {
-    const questionId = `q${questions.length + 1}`;
+    const section = getCurrentSection();
+    if (!section) return;
 
+    const questionId = `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     let newQuestion: Question;
 
-    switch (currentQuestionType) {
+    switch (section.questionType) {
       case QuestionType.MCQ:
+        if (!mcqText.trim() || mcqOptions.some(opt => !opt.text.trim()) || mcqCorrectAnswers.length === 0) {
+          alert('Please fill in all required fields and select at least one correct answer.');
+          return;
+        }
         newQuestion = {
           id: questionId,
           type: QuestionType.MCQ,
@@ -204,6 +290,10 @@ export default function CreateAssessmentPage() {
         break;
 
       case QuestionType.TRUE_FALSE:
+        if (!tfText.trim()) {
+          alert('Please fill in the question text.');
+          return;
+        }
         newQuestion = {
           id: questionId,
           type: QuestionType.TRUE_FALSE,
@@ -214,6 +304,10 @@ export default function CreateAssessmentPage() {
         break;
 
       case QuestionType.DESCRIPTIVE:
+        if (!descText.trim()) {
+          alert('Please fill in the question text.');
+          return;
+        }
         newQuestion = {
           id: questionId,
           type: QuestionType.DESCRIPTIVE,
@@ -224,6 +318,10 @@ export default function CreateAssessmentPage() {
         break;
 
       case QuestionType.CODING:
+        if (!codingText.trim() || !codingProblemStatement.trim()) {
+          alert('Please fill in the question title and problem statement.');
+          return;
+        }
         newQuestion = {
           id: questionId,
           type: QuestionType.CODING,
@@ -240,29 +338,178 @@ export default function CreateAssessmentPage() {
         return;
     }
 
-    setQuestions([...questions, newQuestion]);
+    addQuestionToSection(newQuestion);
     resetQuestionForm();
     setShowQuestionForm(false);
   };
 
-  const removeQuestion = (id: string) => {
-    setQuestions(questions.filter(q => q.id !== id));
+  // Question Bank Functions
+  const loadQuestionBank = () => {
+    const section = getCurrentSection();
+    if (!section) return;
+
+    const allQuestions = questionBankService.getAllQuestions();
+    // Filter by section's question type
+    const filteredByType = allQuestions.filter(q => q.type === section.questionType);
+    setBankQuestions(filteredByType);
+    setFilteredBankQuestions(filteredByType);
   };
 
+  const applyBankFilters = () => {
+    let filtered = [...bankQuestions];
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(q => q.text.toLowerCase().includes(query));
+    }
+
+    if (difficultyFilter !== 'all') {
+      filtered = filtered.filter(q => q.metadata?.difficulty === difficultyFilter);
+    }
+
+    if (topicFilter !== 'all') {
+      filtered = filtered.filter(q => q.metadata?.topic === topicFilter);
+    }
+
+    if (domainFilter !== 'all') {
+      filtered = filtered.filter(q => q.metadata?.domain === domainFilter);
+    }
+
+    setFilteredBankQuestions(filtered);
+  };
+
+  const toggleQuestionSelection = (questionId: string) => {
+    const newSelection = new Set(selectedQuestionIds);
+    if (newSelection.has(questionId)) {
+      newSelection.delete(questionId);
+    } else {
+      newSelection.add(questionId);
+    }
+    setSelectedQuestionIds(newSelection);
+  };
+
+  const addSelectedQuestions = () => {
+    const section = getCurrentSection();
+    if (!section) return;
+
+    const selectedQuestions = bankQuestions.filter(q => selectedQuestionIds.has(q.id));
+
+    // Add questions with new IDs to avoid conflicts
+    const questionsWithNewIds = selectedQuestions.map(q => ({
+      ...q,
+      id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    }));
+
+    updateSection(section.id, {
+      questions: [...section.questions, ...questionsWithNewIds]
+    });
+
+    setSelectedQuestionIds(new Set());
+    setShowQuestionBank(false);
+    setSearchQuery('');
+    setDifficultyFilter('all');
+    setTopicFilter('all');
+    setDomainFilter('all');
+  };
+
+  const openQuestionBank = () => {
+    loadQuestionBank();
+    setShowQuestionBank(true);
+    setShowQuestionForm(false);
+  };
+
+  const closeQuestionBank = () => {
+    setShowQuestionBank(false);
+    setSelectedQuestionIds(new Set());
+    setSearchQuery('');
+    setDifficultyFilter('all');
+    setTopicFilter('all');
+    setDomainFilter('all');
+  };
+
+  // Apply filters whenever they change
+  useEffect(() => {
+    if (showQuestionBank) {
+      applyBankFilters();
+    }
+  }, [searchQuery, difficultyFilter, topicFilter, domainFilter, bankQuestions, showQuestionBank]);
+
+  const getQuestionTypeLabel = (type: QuestionType) => {
+    switch (type) {
+      case QuestionType.MCQ:
+        return 'MCQ';
+      case QuestionType.TRUE_FALSE:
+        return 'True/False';
+      case QuestionType.DESCRIPTIVE:
+        return 'Descriptive';
+      case QuestionType.CODING:
+        return 'Coding';
+      default:
+        return type;
+    }
+  };
+
+  const getDifficultyColor = (difficulty?: QuestionDifficulty) => {
+    switch (difficulty) {
+      case QuestionDifficulty.EASY:
+        return 'bg-green-100 text-green-800';
+      case QuestionDifficulty.MEDIUM:
+        return 'bg-yellow-100 text-yellow-800';
+      case QuestionDifficulty.HARD:
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  // Get unique topics and domains
+  const availableTopics = Array.from(new Set([
+    ...PREDEFINED_TOPICS,
+    ...bankQuestions.map(q => q.metadata?.topic).filter(Boolean) as string[]
+  ])).sort();
+
+  const availableDomains = Array.from(new Set([
+    ...PREDEFINED_DOMAINS,
+    ...bankQuestions.map(q => q.metadata?.domain).filter(Boolean) as string[]
+  ])).sort();
+
   const saveAssessment = () => {
-    const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
+    if (!title.trim()) {
+      alert('Please enter an assessment title.');
+      return;
+    }
+
+    if (sections.length === 0) {
+      alert('Please add at least one section.');
+      return;
+    }
+
+    if (sections.some(s => s.questions.length === 0)) {
+      alert('All sections must have at least one question.');
+      return;
+    }
+
+    // Calculate totals
+    const totalDuration = sections.reduce((sum, s) => sum + s.duration, 0);
+    const totalPoints = sections.reduce((sum, s) =>
+      sum + s.questions.reduce((qSum, q) => qSum + q.points, 0), 0
+    );
+
+    // Flatten questions for backward compatibility
+    const allQuestions = sections.flatMap(s => s.questions);
 
     const newAssessment: Assessment = {
       id: String(Date.now()),
       title,
       description,
-      duration,
+      duration: totalDuration,
       totalPoints,
-      questions,
+      sections,
+      questions: allQuestions,
       createdAt: new Date().toISOString()
     };
 
-    // Store in localStorage for now
+    // Store in localStorage
     const existingAssessments = JSON.parse(localStorage.getItem('custom_assessments') || '[]');
     localStorage.setItem('custom_assessments', JSON.stringify([...existingAssessments, newAssessment]));
 
@@ -270,7 +517,13 @@ export default function CreateAssessmentPage() {
     router.push('/admin/assessments');
   };
 
-  const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
+  const totalDuration = sections.reduce((sum, s) => sum + s.duration, 0);
+  const totalQuestions = sections.reduce((sum, s) => sum + s.questions.length, 0);
+  const totalPoints = sections.reduce((sum, s) =>
+    sum + s.questions.reduce((qSum, q) => qSum + q.points, 0), 0
+  );
+
+  const currentSection = getCurrentSection();
 
   return (
     <AdminRoute>
@@ -284,7 +537,7 @@ export default function CreateAssessmentPage() {
             </Button>
             <div>
               <h2 className="text-3xl font-bold">Create Assessment</h2>
-              <p className="text-muted-foreground">Create a new assessment with custom questions</p>
+              <p className="text-muted-foreground">Create a new section-based assessment</p>
             </div>
           </div>
 
@@ -295,12 +548,12 @@ export default function CreateAssessmentPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
+                <Label htmlFor="title">Title *</Label>
                 <Input
                   id="title"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g., JavaScript Fundamentals"
+                  placeholder="e.g., Full Stack Developer Assessment"
                 />
               </div>
 
@@ -315,94 +568,205 @@ export default function CreateAssessmentPage() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="duration">Duration (minutes)</Label>
-                <Input
-                  id="duration"
-                  type="number"
-                  value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
-                  min={1}
-                />
-              </div>
-
               <div className="p-4 bg-muted rounded-md">
                 <div className="text-sm space-y-1">
-                  <div><span className="font-medium">Total Questions:</span> {questions.length}</div>
+                  <div><span className="font-medium">Total Sections:</span> {sections.length}</div>
+                  <div><span className="font-medium">Total Questions:</span> {totalQuestions}</div>
+                  <div><span className="font-medium">Total Duration:</span> {totalDuration} minutes</div>
                   <div><span className="font-medium">Total Points:</span> {totalPoints}</div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Questions List */}
-          {questions.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Questions ({questions.length})</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {questions.map((q, index) => (
-                  <div key={q.id} className="flex items-center justify-between p-4 border rounded-md">
-                    <div>
-                      <div className="font-medium">Q{index + 1}. {q.text}</div>
-                      <div className="text-sm text-muted-foreground">
-                        Type: {q.type.replace('_', ' ').toUpperCase()} • Points: {q.points}
-                      </div>
+          {/* Sections Management */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Sections ({sections.length})</CardTitle>
+                <Button onClick={addSection} size="sm" className="gap-2">
+                  <Plus className="w-4 h-4" />
+                  Add Section
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {sections.map((section, index) => (
+                <div
+                  key={section.id}
+                  className={`p-4 border-2 rounded-lg transition-colors ${
+                    currentSectionId === section.id ? 'border-primary bg-primary/5' : 'border-border'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    {/* Drag Handle & Move Buttons */}
+                    <div className="flex flex-col gap-1 pt-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => moveSectionUp(index)}
+                        disabled={index === 0}
+                      >
+                        <MoveUp className="w-4 h-4" />
+                      </Button>
+                      <GripVertical className="w-4 h-4 text-muted-foreground" />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => moveSectionDown(index)}
+                        disabled={index === sections.length - 1}
+                      >
+                        <MoveDown className="w-4 h-4" />
+                      </Button>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => removeQuestion(q.id)}
-                      className="text-destructive"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
 
-          {/* Add Question Button */}
-          {!showQuestionForm && (
-            <Button onClick={() => setShowQuestionForm(true)} className="gap-2 w-full">
-              <Plus className="w-4 h-4" />
-              Add Question
-            </Button>
-          )}
+                    {/* Section Details */}
+                    <div className="flex-1 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Section Name</Label>
+                          <Input
+                            value={section.name}
+                            onChange={(e) => updateSection(section.id, { name: e.target.value })}
+                            placeholder="Section name"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs">Question Type</Label>
+                          <Select
+                            value={section.questionType}
+                            onValueChange={(value) => updateSection(section.id, {
+                              questionType: value as QuestionType,
+                              questions: [] // Clear questions when type changes
+                            })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={QuestionType.MCQ}>MCQ</SelectItem>
+                              <SelectItem value={QuestionType.TRUE_FALSE}>True/False</SelectItem>
+                              <SelectItem value={QuestionType.DESCRIPTIVE}>Descriptive</SelectItem>
+                              <SelectItem value={QuestionType.CODING}>Coding</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <Label className="text-xs">Duration (minutes)</Label>
+                          <Input
+                            type="number"
+                            value={section.duration}
+                            onChange={(e) => updateSection(section.id, { duration: Number(e.target.value) })}
+                            min={1}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Section Questions */}
+                      <div>
+                        <div className="text-sm font-medium mb-2">
+                          Questions ({section.questions.length}) • {section.questions.reduce((sum, q) => sum + q.points, 0)} points
+                        </div>
+                        {section.questions.length > 0 && (
+                          <div className="space-y-2">
+                            {section.questions.map((q, qIndex) => (
+                              <div key={q.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-md text-sm">
+                                <div className="flex-1">
+                                  <div className="font-medium">Q{qIndex + 1}. {q.text}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {getQuestionTypeLabel(q.type)} • {q.points} points
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeQuestionFromSection(section.id, q.id)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Section Actions */}
+                      {currentSectionId === section.id && (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setCurrentSectionId(section.id);
+                              setShowQuestionForm(true);
+                              setShowQuestionBank(false);
+                            }}
+                            className="gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Add New Question
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setCurrentSectionId(section.id);
+                              openQuestionBank();
+                            }}
+                            className="gap-2"
+                          >
+                            <Database className="w-4 h-4" />
+                            Select from Bank
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Section Actions */}
+                    <div className="flex flex-col gap-2">
+                      {currentSectionId !== section.id && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentSectionId(section.id)}
+                        >
+                          Select
+                        </Button>
+                      )}
+                      {sections.length > 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeSection(section.id)}
+                          className="text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
           {/* Question Form */}
-          {showQuestionForm && (
+          {showQuestionForm && currentSection && (
             <Card>
               <CardHeader>
-                <CardTitle>Add Question</CardTitle>
+                <CardTitle>Add {getQuestionTypeLabel(currentSection.questionType)} Question to {currentSection.name}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Question Type Selector */}
-                <div className="space-y-2">
-                  <Label>Question Type</Label>
-                  <Select
-                    value={currentQuestionType}
-                    onValueChange={(value) => setCurrentQuestionType(value as QuestionType)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={QuestionType.MCQ}>Multiple Choice</SelectItem>
-                      <SelectItem value={QuestionType.TRUE_FALSE}>True/False</SelectItem>
-                      <SelectItem value={QuestionType.DESCRIPTIVE}>Descriptive</SelectItem>
-                      <SelectItem value={QuestionType.CODING}>Coding</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
                 {/* MCQ Form */}
-                {currentQuestionType === QuestionType.MCQ && (
+                {currentSection.questionType === QuestionType.MCQ && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Question Text</Label>
+                      <Label>Question Text *</Label>
                       <Textarea
                         value={mcqText}
                         onChange={(e) => setMcqText(e.target.value)}
@@ -411,7 +775,7 @@ export default function CreateAssessmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Points</Label>
+                      <Label>Points *</Label>
                       <Input
                         type="number"
                         value={mcqPoints}
@@ -434,7 +798,7 @@ export default function CreateAssessmentPage() {
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label>Options</Label>
+                        <Label>Options *</Label>
                         <Button variant="outline" size="sm" onClick={addMcqOption}>
                           <Plus className="w-4 h-4 mr-1" />
                           Add Option
@@ -442,7 +806,6 @@ export default function CreateAssessmentPage() {
                       </div>
 
                       {mcqMultipleAnswers ? (
-                        // Multiple answers - use checkboxes
                         mcqOptions.map((option) => (
                           <div key={option.id} className="flex items-center gap-2">
                             <Checkbox
@@ -467,7 +830,6 @@ export default function CreateAssessmentPage() {
                           </div>
                         ))
                       ) : (
-                        // Single answer - use radio group
                         <RadioGroup
                           value={mcqCorrectAnswers[0] || ''}
                           onValueChange={(value) => setMcqCorrectAnswers([value])}
@@ -499,10 +861,10 @@ export default function CreateAssessmentPage() {
                 )}
 
                 {/* True/False Form */}
-                {currentQuestionType === QuestionType.TRUE_FALSE && (
+                {currentSection.questionType === QuestionType.TRUE_FALSE && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Question Text</Label>
+                      <Label>Question Text *</Label>
                       <Textarea
                         value={tfText}
                         onChange={(e) => setTfText(e.target.value)}
@@ -511,7 +873,7 @@ export default function CreateAssessmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Points</Label>
+                      <Label>Points *</Label>
                       <Input
                         type="number"
                         value={tfPoints}
@@ -521,7 +883,7 @@ export default function CreateAssessmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Correct Answer</Label>
+                      <Label>Correct Answer *</Label>
                       <RadioGroup
                         value={tfCorrectAnswer.toString()}
                         onValueChange={(value) => setTfCorrectAnswer(value === 'true')}
@@ -540,10 +902,10 @@ export default function CreateAssessmentPage() {
                 )}
 
                 {/* Descriptive Form */}
-                {currentQuestionType === QuestionType.DESCRIPTIVE && (
+                {currentSection.questionType === QuestionType.DESCRIPTIVE && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Question Text</Label>
+                      <Label>Question Text *</Label>
                       <Textarea
                         value={descText}
                         onChange={(e) => setDescText(e.target.value)}
@@ -552,7 +914,7 @@ export default function CreateAssessmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Points</Label>
+                      <Label>Points *</Label>
                       <Input
                         type="number"
                         value={descPoints}
@@ -574,10 +936,10 @@ export default function CreateAssessmentPage() {
                 )}
 
                 {/* Coding Form */}
-                {currentQuestionType === QuestionType.CODING && (
+                {currentSection.questionType === QuestionType.CODING && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label>Question Title</Label>
+                      <Label>Question Title *</Label>
                       <Input
                         value={codingText}
                         onChange={(e) => setCodingText(e.target.value)}
@@ -586,20 +948,17 @@ export default function CreateAssessmentPage() {
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Problem Statement</Label>
+                      <Label>Problem Statement *</Label>
                       <Textarea
                         value={codingProblemStatement}
                         onChange={(e) => setCodingProblemStatement(e.target.value)}
-                        placeholder="Describe the coding problem in detail. Mention the function name and parameters if possible (e.g., 'Write a function arraySum that takes an array...')"
+                        placeholder="Describe the coding problem in detail..."
                         rows={4}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Tip: Include the function name in your description to help auto-generate starter code
-                      </p>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>Points</Label>
+                      <Label>Points *</Label>
                       <Input
                         type="number"
                         value={codingPoints}
@@ -621,9 +980,6 @@ export default function CreateAssessmentPage() {
                           <SelectItem value="java">Java</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Choose the language you're most comfortable with
-                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -642,13 +998,10 @@ export default function CreateAssessmentPage() {
                       <Textarea
                         value={codingStarterCode[codingPrimaryLanguage as keyof typeof codingStarterCode]}
                         onChange={(e) => handlePrimaryCodeChange(e.target.value)}
-                        placeholder={`Write or auto-generate starter code for ${codingPrimaryLanguage}...`}
+                        placeholder={`Write or auto-generate starter code...`}
                         rows={6}
                         className="font-mono text-sm"
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Click "Auto-Generate" to create starter code based on your problem statement
-                      </p>
                     </div>
 
                     <div className="space-y-2">
@@ -665,9 +1018,6 @@ export default function CreateAssessmentPage() {
                       </div>
                       {showAdvancedLanguages && (
                         <div className="space-y-3 border rounded-md p-4 bg-muted/50">
-                          <p className="text-sm text-muted-foreground">
-                            Enable additional languages. Starter code will be auto-translated from {codingPrimaryLanguage}.
-                          </p>
                           <div className="grid grid-cols-2 gap-2">
                             {['javascript', 'python', 'cpp', 'java']
                               .filter(lang => lang !== codingPrimaryLanguage)
@@ -682,17 +1032,6 @@ export default function CreateAssessmentPage() {
                                 </div>
                               ))}
                           </div>
-                          {codingAllowedLanguages.filter(l => l !== codingPrimaryLanguage).length > 0 && (
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleAutoGenerateStarterCode}
-                              className="w-full"
-                            >
-                              Generate Code for All Languages
-                            </Button>
-                          )}
                         </div>
                       )}
                     </div>
@@ -773,6 +1112,169 @@ export default function CreateAssessmentPage() {
             </Card>
           )}
 
+          {/* Question Bank Selection */}
+          {showQuestionBank && currentSection && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="w-5 h-5" />
+                  Select {getQuestionTypeLabel(currentSection.questionType)} Questions for {currentSection.name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Search */}
+                <div className="space-y-2">
+                  <Label htmlFor="bank-search">Search by Question Title</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                    <Input
+                      id="bank-search"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search questions..."
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
+
+                {/* Filters Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Difficulty Filter */}
+                  <div className="space-y-2">
+                    <Label>Difficulty</Label>
+                    <Select value={difficultyFilter} onValueChange={setDifficultyFilter}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value={QuestionDifficulty.EASY}>Easy</SelectItem>
+                        <SelectItem value={QuestionDifficulty.MEDIUM}>Medium</SelectItem>
+                        <SelectItem value={QuestionDifficulty.HARD}>Hard</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Topic Filter */}
+                  <div className="space-y-2">
+                    <Label>Topic</Label>
+                    <Select value={topicFilter} onValueChange={setTopicFilter}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {availableTopics.map(topic => (
+                          <SelectItem key={topic} value={topic}>{topic}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Domain Filter */}
+                  <div className="space-y-2">
+                    <Label>Domain</Label>
+                    <Select value={domainFilter} onValueChange={setDomainFilter}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {availableDomains.map(domain => (
+                          <SelectItem key={domain} value={domain}>{domain}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Results Count */}
+                <div className="text-sm text-muted-foreground">
+                  Showing {filteredBankQuestions.length} of {bankQuestions.length} {getQuestionTypeLabel(currentSection.questionType)} questions • {selectedQuestionIds.size} selected
+                </div>
+
+                {/* Questions List */}
+                <div className="border rounded-lg max-h-[400px] overflow-y-auto">
+                  {filteredBankQuestions.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      {bankQuestions.length === 0
+                        ? `No ${getQuestionTypeLabel(currentSection.questionType)} questions in the bank yet.`
+                        : 'No questions match your filters.'}
+                    </div>
+                  ) : (
+                    <div className="space-y-2 p-4">
+                      {filteredBankQuestions.map((question) => (
+                        <div
+                          key={question.id}
+                          className={`p-4 border rounded-lg cursor-pointer transition-colors ${
+                            selectedQuestionIds.has(question.id)
+                              ? 'bg-primary/10 border-primary'
+                              : 'hover:bg-muted/50'
+                          }`}
+                          onClick={() => toggleQuestionSelection(question.id)}
+                        >
+                          <div className="flex items-start gap-3">
+                            <Checkbox
+                              checked={selectedQuestionIds.has(question.id)}
+                              onCheckedChange={() => toggleQuestionSelection(question.id)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <div className="flex-1 space-y-2">
+                              {/* Question Text */}
+                              <div className="font-medium">
+                                {question.text}
+                              </div>
+
+                              {/* Metadata Badges */}
+                              <div className="flex flex-wrap gap-2">
+                                <Badge variant="outline">
+                                  {question.points} points
+                                </Badge>
+                                {question.metadata?.difficulty && (
+                                  <Badge className={getDifficultyColor(question.metadata.difficulty)}>
+                                    {question.metadata.difficulty}
+                                  </Badge>
+                                )}
+                                {question.metadata?.topic && (
+                                  <Badge variant="secondary">
+                                    {question.metadata.topic}
+                                  </Badge>
+                                )}
+                                {question.metadata?.domain && (
+                                  <Badge variant="secondary">
+                                    {question.metadata.domain}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4">
+                  <Button
+                    onClick={addSelectedQuestions}
+                    disabled={selectedQuestionIds.size === 0}
+                    className="flex-1"
+                  >
+                    Add Selected ({selectedQuestionIds.size})
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={closeQuestionBank}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Save Assessment */}
           <div className="flex gap-2 justify-end">
             <Button
@@ -783,7 +1285,7 @@ export default function CreateAssessmentPage() {
             </Button>
             <Button
               onClick={saveAssessment}
-              disabled={!title || questions.length === 0}
+              disabled={!title || totalQuestions === 0}
               className="gap-2"
             >
               <Save className="w-4 h-4" />

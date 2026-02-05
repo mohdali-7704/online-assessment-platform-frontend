@@ -1,13 +1,23 @@
-import { Question, Answer } from './question';
+import { Question, Answer, QuestionType } from './question';
+
+// Assessment Section interface
+export interface AssessmentSection {
+  id: string;
+  name: string;
+  questionType: QuestionType; // Each section has one question type
+  duration: number; // Duration in minutes for this section
+  questions: Question[];
+}
 
 // Assessment interface
 export interface Assessment {
   id: string;
   title: string;
   description: string;
-  duration: number; // Duration in minutes
+  duration: number; // Total duration (sum of all section durations)
   totalPoints: number;
-  questions: Question[];
+  sections?: AssessmentSection[]; // New section-based structure
+  questions: Question[]; // Legacy flat structure for backward compatibility
   createdAt: string;
 }
 

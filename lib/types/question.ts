@@ -6,12 +6,29 @@ export enum QuestionType {
   CODING = 'coding'
 }
 
+// Question difficulty levels
+export enum QuestionDifficulty {
+  EASY = 'easy',
+  MEDIUM = 'medium',
+  HARD = 'hard'
+}
+
+// Question metadata for question bank
+export interface QuestionMetadata {
+  topic?: string;
+  domain?: string;
+  difficulty?: QuestionDifficulty;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // Base question interface
 export interface BaseQuestion {
   id: string;
   type: QuestionType;
   text: string;
   points: number;
+  metadata?: QuestionMetadata;
 }
 
 // MCQ Question
