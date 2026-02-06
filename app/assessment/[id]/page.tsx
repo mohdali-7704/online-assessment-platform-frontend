@@ -248,36 +248,6 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
     );
   }
 
-  // Show permission dialog before assessment starts
-  if (showPermissionDialog) {
-    return (
-      <ScreenCapturePermissionDialog
-        open={showPermissionDialog}
-        onContinue={requestScreenCapture}
-      />
-    );
-  }
-
-  // Show error dialog if permission was denied
-  if (showRequiredDialog) {
-    return (
-      <ScreenCaptureRequiredDialog
-        open={showRequiredDialog}
-        onRetry={requestScreenCapture}
-        onCancel={() => router.push('/assessments')}
-      />
-    );
-  }
-
-  // Wait for screen capture to be initialized
-  if (!screenStream) {
-    return (
-      <div className="container mx-auto px-4 py-12 text-center">
-        <p>Initializing screen capture...</p>
-      </div>
-    );
-  }
-
   // Use sections if available
   const useSections = assessment.sections && assessment.sections.length > 0;
   const currentSection = useSections ? assessment.sections![currentSectionIndex] : null;
@@ -390,30 +360,6 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
       // Time's up for entire assessment or last section
       handleSubmit();
     }
-  };
-
-  const handleViolation = (type: string, data: any) => {
-    console.log('[Assessment] Security violation received:', type, {
-      ...data,
-      screenshot: data.screenshot ? `${data.screenshot.substring(0, 50)}... (${data.screenshotSize} KB)` : 'NO SCREENSHOT',
-      hasScreenshot: !!data.screenshot
-    });
-
-    const newViolations = [...tabViolations, { type, data }];
-    setTabViolations(newViolations);
-
-    // Store violations in localStorage for now (or send to backend later)
-    localStorage.setItem(
-      `violations_${id}`,
-      JSON.stringify(newViolations)
-    );
-
-    console.log('[Assessment] Stored violations in localStorage. Total violations:', newViolations.length);
-  };
-
-  const handleMaxViolations = () => {
-    alert('Maximum tab switch violations reached! Assessment will be auto-submitted.');
-    handleSubmit();
   };
 
   const handleViolation = (type: string, data: any) => {
