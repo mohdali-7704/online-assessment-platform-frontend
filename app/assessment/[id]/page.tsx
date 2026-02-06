@@ -11,10 +11,13 @@ import QuestionNavigator from '@/components/assessment/QuestionNavigator';
 import QuestionRenderer from '@/components/assessment/QuestionRenderer';
 import { getAssessmentById } from '@/data/mock-assessments';
 import { UserAnswer, SectionProgress } from '@/lib/types/assessment';
-import { Answer } from '@/lib/types/question';
+import { Answer, Question } from '@/lib/types/question';
 import { QuestionType } from '@/lib/types/question';
 import { ChevronLeft, ChevronRight, Flag, Clock } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
+import { TabDetector } from '@/components/security/TabDetector';
+import { ScreenCapturePermissionDialog } from '@/components/security/ScreenCapturePermissionDialog';
+import { ScreenCaptureRequiredDialog } from '@/components/security/ScreenCaptureRequiredDialog';
 
 export default function AssessmentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -30,6 +33,13 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
   const [startTime] = useState(Date.now());
   const [sectionStartTime, setSectionStartTime] = useState(Date.now());
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
+  const [tabViolations, setTabViolations] = useState<any[]>([]);
+
+  // Screen capture state
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const [showPermissionDialog, setShowPermissionDialog] = useState(true);
+  const [showRequiredDialog, setShowRequiredDialog] = useState(false);
+  const [browserSupported, setBrowserSupported] = useState(true);
   const [showSectionCompleteDialog, setShowSectionCompleteDialog] = useState(false);
 
   useEffect(() => {
@@ -37,6 +47,71 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
       router.push('/login');
     }
   }, [isAuthenticated, router]);
+
+  // Check browser support for screen capture
+  useEffect(() => {
+    const checkBrowserSupport = () => {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        console.error('[ScreenCapture] Browser does not support screen capture');
+        setBrowserSupported(false);
+        return false;
+      }
+      return true;
+    };
+
+    checkBrowserSupport();
+  }, []);
+
+  // Request screen capture permission
+  const requestScreenCapture = async () => {
+    try {
+      console.log('[ScreenCapture] Requesting screen share permission...');
+
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          displaySurface: 'monitor' as DisplayCaptureSurfaceType,
+          cursor: 'always' as const,
+        },
+        audio: false,
+        preferCurrentTab: false,
+      } as MediaStreamConstraints);
+
+      console.log('[ScreenCapture] Screen share permission granted');
+
+      // Listen for screen sharing being stopped by user
+      const videoTrack = stream.getVideoTracks()[0];
+      videoTrack.onended = () => {
+        console.warn('[ScreenCapture] Screen sharing stopped by user');
+        alert('Screen sharing stopped. Assessment will be auto-submitted.');
+
+        // Record violation
+        handleViolation('tab_switch', {
+          timestamp: new Date().toISOString(),
+          violationNumber: tabViolations.length + 1,
+          reason: 'screen_share_stopped'
+        });
+
+        handleSubmit();
+      };
+
+      setScreenStream(stream);
+      setShowPermissionDialog(false);
+    } catch (error) {
+      console.error('[ScreenCapture] Permission denied or error:', error);
+      setShowPermissionDialog(false);
+      setShowRequiredDialog(true);
+    }
+  };
+
+  // Cleanup screen stream on unmount
+  useEffect(() => {
+    return () => {
+      if (screenStream) {
+        console.log('[ScreenCapture] Cleaning up screen stream');
+        screenStream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [screenStream]);
 
   useEffect(() => {
     if (!assessment) return;
@@ -99,6 +174,30 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
     return null;
   }
 
+  // Check browser support
+  if (!browserSupported) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center space-y-4">
+        <h1 className="text-2xl font-bold text-red-600">Browser Not Supported</h1>
+        <p className="text-muted-foreground">
+          Your browser doesn't support the required security features for this assessment.
+        </p>
+        <div className="text-sm text-muted-foreground">
+          <p className="font-medium mb-2">Please use one of these browsers:</p>
+          <ul className="space-y-1">
+            <li>• Google Chrome (recommended)</li>
+            <li>• Microsoft Edge</li>
+            <li>• Mozilla Firefox</li>
+            <li>• Safari 13 or later</li>
+          </ul>
+        </div>
+        <Button onClick={() => router.push('/assessments')} className="mt-4">
+          Back to Assessments
+        </Button>
+      </div>
+    );
+  }
+
   if (!assessment) {
     return (
       <div className="container mx-auto px-4 py-12 text-center">
@@ -115,6 +214,36 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
     return (
       <div className="container mx-auto px-4 py-12 text-center">
         <p>Loading assessment...</p>
+      </div>
+    );
+  }
+
+// Show permission dialog before assessment starts
+  if (showPermissionDialog) {
+    return (
+      <ScreenCapturePermissionDialog
+        open={showPermissionDialog}
+        onContinue={requestScreenCapture}
+      />
+    );
+  }
+
+  // Show error dialog if permission was denied
+  if (showRequiredDialog) {
+    return (
+      <ScreenCaptureRequiredDialog
+        open={showRequiredDialog}
+        onRetry={requestScreenCapture}
+        onCancel={() => router.push('/assessments')}
+      />
+    );
+  }
+
+  // Wait for screen capture to be initialized
+  if (!screenStream) {
+    return (
+      <div className="container mx-auto px-4 py-12 text-center">
+        <p>Initializing screen capture...</p>
       </div>
     );
   }
@@ -222,13 +351,39 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
   };
 
   const handleTimeUp = () => {
+
     if (useSections && currentSectionIndex < assessment.sections!.length - 1) {
       // Time's up for current section, force move to next section
       handleSectionComplete();
+
     } else {
       // Time's up for entire assessment or last section
       handleSubmit();
     }
+  };
+
+  const handleViolation = (type: string, data: any) => {
+    console.log('[Assessment] Security violation received:', type, {
+      ...data,
+      screenshot: data.screenshot ? `${data.screenshot.substring(0, 50)}... (${data.screenshotSize} KB)` : 'NO SCREENSHOT',
+      hasScreenshot: !!data.screenshot
+    });
+
+    const newViolations = [...tabViolations, { type, data }];
+    setTabViolations(newViolations);
+
+    // Store violations in localStorage for now (or send to backend later)
+    localStorage.setItem(
+      `violations_${id}`,
+      JSON.stringify(newViolations)
+    );
+
+    console.log('[Assessment] Stored violations in localStorage. Total violations:', newViolations.length);
+  };
+
+  const handleMaxViolations = () => {
+    alert('Maximum tab switch violations reached! Assessment will be auto-submitted.');
+    handleSubmit();
   };
 
   // Calculate progress for current section
@@ -238,7 +393,13 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
   const progress = (answeredCount / currentQuestions.length) * 100;
 
   return (
-    <div className="container mx-auto px-4 py-6">
+    <TabDetector
+      onViolation={handleViolation}
+      maxViolations={3}
+      onMaxViolationsReached={handleMaxViolations}
+      screenStream={screenStream}
+    >
+      <div className="container mx-auto px-4 py-6">
       {/* Header */}
       <div className="bg-background border-b sticky top-0 z-10 -mx-4 px-4 py-4 mb-6">
         <div className="flex items-center justify-between mb-4">
@@ -455,6 +616,7 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
           </DialogContent>
         </Dialog>
       )}
-    </div>
+      </div>
+    </TabDetector>
   );
 }

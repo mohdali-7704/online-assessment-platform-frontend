@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Assessment } from '@/lib/types/question';
+import { Assessment } from '@/lib/types/assessment';
 import { Clock, FileText, Award } from 'lucide-react';
 
 interface AssessmentCardProps {
