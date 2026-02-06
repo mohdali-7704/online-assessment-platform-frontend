@@ -5,18 +5,19 @@ import { useRouter, useParams } from 'next/navigation';
 import AdminRoute from '@/components/auth/AdminRoute';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { ArrowLeft, Plus, Trash2, Save } from 'lucide-react';
 import { QuestionType, QuestionDifficulty } from '@/lib/types/question';
-import type { Question, MCQQuestion, TrueFalseQuestion, DescriptiveQuestion, CodingQuestion, TestCase, MCQOption } from '@/lib/types/question';
-import { generateStarterCode, generateAllStarterCode, detectFunctionSignature } from '@/lib/utils/code-templates';
+import type { Question, MCQQuestion, TrueFalseQuestion, DescriptiveQuestion, CodingQuestion, MCQOption, TestCase } from '@/lib/types/question';
 import { questionBankService, PREDEFINED_TOPICS, PREDEFINED_DOMAINS } from '@/lib/services/questionBankService';
+import {
+  QuestionFormHeader,
+  QuestionFormActions,
+  QuestionMetadataForm,
+  QuestionTypeSelector,
+  MCQQuestionForm,
+  TrueFalseQuestionForm,
+  DescriptiveQuestionForm,
+  CodingQuestionForm
+} from '@/components/admin/question-forms';
 
 export default function EditQuestionPage() {
   const router = useRouter();
@@ -144,95 +145,6 @@ export default function EditQuestionPage() {
     setLoading(false);
   }, [questionId, router]);
 
-  const addMcqOption = () => {
-    const newId = String.fromCharCode(97 + mcqOptions.length);
-    setMcqOptions([...mcqOptions, { id: newId, text: '' }]);
-  };
-
-  const removeMcqOption = (id: string) => {
-    setMcqOptions(mcqOptions.filter(opt => opt.id !== id));
-    setMcqCorrectAnswers(mcqCorrectAnswers.filter(ans => ans !== id));
-  };
-
-  const updateMcqOption = (id: string, text: string) => {
-    setMcqOptions(mcqOptions.map(opt => opt.id === id ? { ...opt, text } : opt));
-  };
-
-  const toggleMcqCorrectAnswer = (id: string) => {
-    if (mcqMultipleAnswers) {
-      if (mcqCorrectAnswers.includes(id)) {
-        setMcqCorrectAnswers(mcqCorrectAnswers.filter(ans => ans !== id));
-      } else {
-        setMcqCorrectAnswers([...mcqCorrectAnswers, id]);
-      }
-    } else {
-      setMcqCorrectAnswers([id]);
-    }
-  };
-
-  const addTestCase = () => {
-    const newId = `t${codingTestCases.length + 1}`;
-    setCodingTestCases([...codingTestCases, { id: newId, input: '', expectedOutput: '', isHidden: false }]);
-  };
-
-  const removeTestCase = (id: string) => {
-    setCodingTestCases(codingTestCases.filter(tc => tc.id !== id));
-  };
-
-  const updateTestCase = (id: string, field: keyof TestCase, value: any) => {
-    setCodingTestCases(codingTestCases.map(tc => tc.id === id ? { ...tc, [field]: value } : tc));
-  };
-
-  const toggleLanguage = (lang: string) => {
-    if (codingAllowedLanguages.includes(lang)) {
-      setCodingAllowedLanguages(codingAllowedLanguages.filter(l => l !== lang));
-    } else {
-      setCodingAllowedLanguages([...codingAllowedLanguages, lang]);
-    }
-  };
-
-  const handleAutoGenerateStarterCode = () => {
-    const signature = detectFunctionSignature(codingProblemStatement || codingText);
-
-    if (!signature) {
-      alert('Could not detect function signature. Please provide more details in the problem statement.');
-      return;
-    }
-
-    const primaryCode = generateStarterCode(
-      codingPrimaryLanguage,
-      signature.name,
-      signature.parameters
-    );
-
-    const allCodes = generateAllStarterCode(
-      codingPrimaryLanguage,
-      primaryCode,
-      codingAllowedLanguages
-    );
-
-    setCodingStarterCode({
-      javascript: allCodes.javascript || '',
-      python: allCodes.python || '',
-      cpp: allCodes.cpp || '',
-      java: allCodes.java || ''
-    });
-  };
-
-  const handlePrimaryLanguageChange = (lang: string) => {
-    setCodingPrimaryLanguage(lang);
-
-    if (!codingAllowedLanguages.includes(lang)) {
-      setCodingAllowedLanguages([lang, ...codingAllowedLanguages]);
-    }
-  };
-
-  const handlePrimaryCodeChange = (code: string) => {
-    setCodingStarterCode(prev => ({
-      ...prev,
-      [codingPrimaryLanguage]: code
-    }));
-  };
 
   const updateQuestion = () => {
     // Get final topic and domain values
@@ -344,468 +256,102 @@ export default function EditQuestionPage() {
     );
   }
 
-  // Extended topics and domains with "custom" option
-  const topicsWithCustom = [...PREDEFINED_TOPICS, 'Custom'];
-  const domainsWithCustom = [...PREDEFINED_DOMAINS, 'Custom'];
-
   return (
     <AdminRoute>
       <AdminLayout>
         <div className="space-y-6">
-          {/* Header */}
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" onClick={() => router.back()} className="gap-2">
-              <ArrowLeft className="w-4 h-4" />
-              Back
-            </Button>
-            <div>
-              <h2 className="text-3xl font-bold">Edit Question</h2>
-              <p className="text-muted-foreground">Update question details</p>
-            </div>
-          </div>
+          <QuestionFormHeader
+            title="Edit Question"
+            description="Update question details"
+          />
 
-          {/* Metadata Card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Question Metadata</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Difficulty */}
-                <div className="space-y-2">
-                  <Label>Difficulty *</Label>
-                  <Select value={difficulty} onValueChange={(value) => setDifficulty(value as QuestionDifficulty)}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={QuestionDifficulty.EASY}>Easy</SelectItem>
-                      <SelectItem value={QuestionDifficulty.MEDIUM}>Medium</SelectItem>
-                      <SelectItem value={QuestionDifficulty.HARD}>Hard</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+          <QuestionMetadataForm
+            topic={topic}
+            setTopic={setTopic}
+            customTopic={customTopic}
+            setCustomTopic={setCustomTopic}
+            domain={domain}
+            setDomain={setDomain}
+            customDomain={customDomain}
+            setCustomDomain={setCustomDomain}
+            difficulty={difficulty}
+            setDifficulty={setDifficulty}
+          />
 
-                {/* Topic */}
-                <div className="space-y-2">
-                  <Label>Topic</Label>
-                  <Select value={topic} onValueChange={setTopic}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a topic" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {topicsWithCustom.map(t => (
-                        <SelectItem key={t} value={t === 'Custom' ? 'custom' : t}>
-                          {t}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {topic === 'custom' && (
-                    <Input
-                      value={customTopic}
-                      onChange={(e) => setCustomTopic(e.target.value)}
-                      placeholder="Enter custom topic"
-                      className="mt-2"
-                    />
-                  )}
-                </div>
-
-                {/* Domain */}
-                <div className="space-y-2">
-                  <Label>Domain</Label>
-                  <Select value={domain} onValueChange={setDomain}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a domain" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {domainsWithCustom.map(d => (
-                        <SelectItem key={d} value={d === 'Custom' ? 'custom' : d}>
-                          {d}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {domain === 'custom' && (
-                    <Input
-                      value={customDomain}
-                      onChange={(e) => setCustomDomain(e.target.value)}
-                      placeholder="Enter custom domain"
-                      className="mt-2"
-                    />
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Question Form - Same as Add Question but cannot change type */}
           <Card>
             <CardHeader>
               <CardTitle>Question Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Question Type Display (Non-editable) */}
-              <div className="space-y-2">
-                <Label>Question Type</Label>
-                <Input
-                  value={currentQuestionType.replace('_', ' ').toUpperCase()}
-                  disabled
-                  className="bg-muted"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Question type cannot be changed after creation
-                </p>
-              </div>
+              <QuestionTypeSelector
+                currentType={currentQuestionType}
+                isEditing
+              />
 
-              {/* MCQ Form */}
               {currentQuestionType === QuestionType.MCQ && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Question Text *</Label>
-                    <Textarea
-                      value={mcqText}
-                      onChange={(e) => setMcqText(e.target.value)}
-                      placeholder="Enter your question"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Points *</Label>
-                    <Input
-                      type="number"
-                      value={mcqPoints}
-                      onChange={(e) => setMcqPoints(Number(e.target.value))}
-                      min={1}
-                    />
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="multiple"
-                      checked={mcqMultipleAnswers}
-                      onCheckedChange={(checked) => {
-                        setMcqMultipleAnswers(!!checked);
-                        setMcqCorrectAnswers([]);
-                      }}
-                    />
-                    <Label htmlFor="multiple">Allow multiple correct answers</Label>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Options *</Label>
-                      <Button variant="outline" size="sm" onClick={addMcqOption}>
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add Option
-                      </Button>
-                    </div>
-
-                    {mcqMultipleAnswers ? (
-                      mcqOptions.map((option) => (
-                        <div key={option.id} className="flex items-center gap-2">
-                          <Checkbox
-                            checked={mcqCorrectAnswers.includes(option.id)}
-                            onCheckedChange={() => toggleMcqCorrectAnswer(option.id)}
-                          />
-                          <Input
-                            value={option.text}
-                            onChange={(e) => updateMcqOption(option.id, e.target.value)}
-                            placeholder={`Option ${option.id.toUpperCase()}`}
-                            className="flex-1"
-                          />
-                          {mcqOptions.length > 2 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeMcqOption(option.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <RadioGroup
-                        value={mcqCorrectAnswers[0] || ''}
-                        onValueChange={(value) => setMcqCorrectAnswers([value])}
-                      >
-                        {mcqOptions.map((option) => (
-                          <div key={option.id} className="flex items-center gap-2">
-                            <RadioGroupItem value={option.id} id={`option-${option.id}`} />
-                            <Input
-                              value={option.text}
-                              onChange={(e) => updateMcqOption(option.id, e.target.value)}
-                              placeholder={`Option ${option.id.toUpperCase()}`}
-                              className="flex-1"
-                            />
-                            {mcqOptions.length > 2 && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => removeMcqOption(option.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            )}
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    )}
-                  </div>
-                </div>
+                <MCQQuestionForm
+                  text={mcqText}
+                  setText={setMcqText}
+                  points={mcqPoints}
+                  setPoints={setMcqPoints}
+                  options={mcqOptions}
+                  setOptions={setMcqOptions}
+                  correctAnswers={mcqCorrectAnswers}
+                  setCorrectAnswers={setMcqCorrectAnswers}
+                  multipleAnswers={mcqMultipleAnswers}
+                  setMultipleAnswers={setMcqMultipleAnswers}
+                />
               )}
 
-              {/* True/False Form */}
               {currentQuestionType === QuestionType.TRUE_FALSE && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Question Text *</Label>
-                    <Textarea
-                      value={tfText}
-                      onChange={(e) => setTfText(e.target.value)}
-                      placeholder="Enter your true/false question"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Points *</Label>
-                    <Input
-                      type="number"
-                      value={tfPoints}
-                      onChange={(e) => setTfPoints(Number(e.target.value))}
-                      min={1}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Correct Answer *</Label>
-                    <RadioGroup
-                      value={tfCorrectAnswer.toString()}
-                      onValueChange={(value) => setTfCorrectAnswer(value === 'true')}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="true" id="true" />
-                        <Label htmlFor="true">True</Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="false" id="false" />
-                        <Label htmlFor="false">False</Label>
-                      </div>
-                    </RadioGroup>
-                  </div>
-                </div>
+                <TrueFalseQuestionForm
+                  text={tfText}
+                  setText={setTfText}
+                  points={tfPoints}
+                  setPoints={setTfPoints}
+                  correctAnswer={tfCorrectAnswer}
+                  setCorrectAnswer={setTfCorrectAnswer}
+                />
               )}
 
-              {/* Descriptive Form */}
               {currentQuestionType === QuestionType.DESCRIPTIVE && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Question Text *</Label>
-                    <Textarea
-                      value={descText}
-                      onChange={(e) => setDescText(e.target.value)}
-                      placeholder="Enter your question"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Points *</Label>
-                    <Input
-                      type="number"
-                      value={descPoints}
-                      onChange={(e) => setDescPoints(Number(e.target.value))}
-                      min={1}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Max Length (optional)</Label>
-                    <Input
-                      type="number"
-                      value={descMaxLength || ''}
-                      onChange={(e) => setDescMaxLength(e.target.value ? Number(e.target.value) : undefined)}
-                      placeholder="Leave empty for no limit"
-                    />
-                  </div>
-                </div>
+                <DescriptiveQuestionForm
+                  text={descText}
+                  setText={setDescText}
+                  points={descPoints}
+                  setPoints={setDescPoints}
+                  maxLength={descMaxLength}
+                  setMaxLength={setDescMaxLength}
+                />
               )}
 
-              {/* Coding Form - Abbreviated for brevity, same as add page */}
               {currentQuestionType === QuestionType.CODING && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label>Question Title *</Label>
-                    <Input
-                      value={codingText}
-                      onChange={(e) => setCodingText(e.target.value)}
-                      placeholder="e.g., Array Sum"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Problem Statement *</Label>
-                    <Textarea
-                      value={codingProblemStatement}
-                      onChange={(e) => setCodingProblemStatement(e.target.value)}
-                      placeholder="Describe the coding problem in detail..."
-                      rows={4}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Points *</Label>
-                    <Input
-                      type="number"
-                      value={codingPoints}
-                      onChange={(e) => setCodingPoints(Number(e.target.value))}
-                      min={1}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Primary Programming Language</Label>
-                    <Select value={codingPrimaryLanguage} onValueChange={handlePrimaryLanguageChange}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="javascript">JavaScript</SelectItem>
-                        <SelectItem value="python">Python</SelectItem>
-                        <SelectItem value="cpp">C++</SelectItem>
-                        <SelectItem value="java">Java</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Starter Code ({codingPrimaryLanguage.toUpperCase()})</Label>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAutoGenerateStarterCode}
-                        disabled={!codingProblemStatement && !codingText}
-                      >
-                        Auto-Generate
-                      </Button>
-                    </div>
-                    <Textarea
-                      value={codingStarterCode[codingPrimaryLanguage as keyof typeof codingStarterCode]}
-                      onChange={(e) => handlePrimaryCodeChange(e.target.value)}
-                      placeholder={`Write or auto-generate starter code...`}
-                      rows={6}
-                      className="font-mono text-sm"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Additional Languages (Optional)</Label>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowAdvancedLanguages(!showAdvancedLanguages)}
-                      >
-                        {showAdvancedLanguages ? 'Hide' : 'Show'}
-                      </Button>
-                    </div>
-                    {showAdvancedLanguages && (
-                      <div className="space-y-3 border rounded-md p-4 bg-muted/50">
-                        <div className="grid grid-cols-2 gap-2">
-                          {['javascript', 'python', 'cpp', 'java']
-                            .filter(lang => lang !== codingPrimaryLanguage)
-                            .map((lang) => (
-                              <div key={lang} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={lang}
-                                  checked={codingAllowedLanguages.includes(lang)}
-                                  onCheckedChange={() => toggleLanguage(lang)}
-                                />
-                                <Label htmlFor={lang}>{lang.toUpperCase()}</Label>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Test Cases</Label>
-                      <Button variant="outline" size="sm" onClick={addTestCase}>
-                        <Plus className="w-4 h-4 mr-1" />
-                        Add Test Case
-                      </Button>
-                    </div>
-
-                    {codingTestCases.map((tc, index) => (
-                      <div key={tc.id} className="p-4 border rounded-md space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Label>Test Case {index + 1}</Label>
-                          {codingTestCases.length > 1 && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => removeTestCase(tc.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-sm">Input</Label>
-                          <Input
-                            value={tc.input}
-                            onChange={(e) => updateTestCase(tc.id, 'input', e.target.value)}
-                            placeholder="e.g., [1, 2, 3]"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label className="text-sm">Expected Output</Label>
-                          <Input
-                            value={tc.expectedOutput}
-                            onChange={(e) => updateTestCase(tc.id, 'expectedOutput', e.target.value)}
-                            placeholder="e.g., 6"
-                          />
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`hidden-${tc.id}`}
-                            checked={tc.isHidden}
-                            onCheckedChange={(checked) => updateTestCase(tc.id, 'isHidden', !!checked)}
-                          />
-                          <Label htmlFor={`hidden-${tc.id}`}>Hidden test case</Label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <CodingQuestionForm
+                  text={codingText}
+                  setText={setCodingText}
+                  problemStatement={codingProblemStatement}
+                  setProblemStatement={setCodingProblemStatement}
+                  points={codingPoints}
+                  setPoints={setCodingPoints}
+                  primaryLanguage={codingPrimaryLanguage}
+                  setPrimaryLanguage={setCodingPrimaryLanguage}
+                  starterCode={codingStarterCode}
+                  setStarterCode={setCodingStarterCode}
+                  testCases={codingTestCases}
+                  setTestCases={setCodingTestCases}
+                  allowedLanguages={codingAllowedLanguages}
+                  setAllowedLanguages={setCodingAllowedLanguages}
+                  showAdvancedLanguages={showAdvancedLanguages}
+                  setShowAdvancedLanguages={setShowAdvancedLanguages}
+                />
               )}
             </CardContent>
           </Card>
 
-          {/* Update Button */}
-          <div className="flex gap-2 justify-end">
-            <Button
-              variant="outline"
-              onClick={() => router.back()}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={updateQuestion}
-              className="gap-2"
-            >
-              <Save className="w-4 h-4" />
-              Update Question
-            </Button>
-          </div>
+          <QuestionFormActions
+            onSave={updateQuestion}
+            saveLabel="Update Question"
+          />
         </div>
       </AdminLayout>
     </AdminRoute>
