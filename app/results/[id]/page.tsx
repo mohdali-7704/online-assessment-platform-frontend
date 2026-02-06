@@ -11,10 +11,11 @@ import { Progress } from '@/components/ui/progress';
 import { getAssessmentById } from '@/data/mock-assessments';
 import { UserAnswer } from '@/lib/types/assessment';
 import { calculateScore, formatTime, checkAnswer } from '@/lib/utils/helpers';
-import { QuestionType, MCQQuestion, TrueFalseQuestion, CodingQuestion, MCQAnswer, TrueFalseAnswer, CodingAnswer } from '@/lib/types/question';
+import { QuestionType, MCQQuestion, TrueFalseQuestion, CodingQuestion, MCQAnswer, TrueFalseAnswer, CodingAnswer, Question } from '@/lib/types/question';
 import { CheckCircle2, XCircle, Award, Clock, FileText, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import CodeOutputPanel from '@/components/code-editor/CodeOutputPanel';
+import { ViolationReview } from '@/components/security/ViolationReview';
 
 export default function ResultsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -125,8 +126,8 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
         <div className="space-y-4">
           <h2 className="text-2xl font-bold">Question Review</h2>
 
-          {assessment.questions.map((question, index) => {
-            const userAnswer = result.userAnswers.find(ua => ua.questionId === question.id);
+          {assessment.questions.map((question: Question, index: number) => {
+            const userAnswer = result.userAnswers.find((ua: UserAnswer) => ua.questionId === question.id);
             const isCorrect = userAnswer ? checkAnswer(question, userAnswer.answer) : false;
             const wasAnswered = userAnswer?.isAnswered || false;
 
@@ -301,6 +302,11 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
               </Card>
             );
           })}
+        </div>
+
+        {/* Security Violations Review */}
+        <div className="mt-8">
+          <ViolationReview assessmentId={id} />
         </div>
 
         {/* Actions */}
