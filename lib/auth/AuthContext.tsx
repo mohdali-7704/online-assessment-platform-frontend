@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { userService } from '@/lib/services/userService';
 
 export type UserRole = 'admin' | 'user';
 
@@ -22,34 +23,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users database
-const MOCK_USERS = [
-  {
-    id: '1',
-    username: 'john',
-    password: 'john123',
-    name: 'John Doe',
-    email: 'john@example.com',
-    role: 'user' as UserRole
-  },
-  {
-    id: '2',
-    username: 'jane',
-    password: 'jane123',
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    role: 'user' as UserRole
-  },
-  {
-    id: '3',
-    username: 'admin',
-    password: 'admin123',
-    name: 'Admin User',
-    email: 'admin@example.com',
-    role: 'admin' as UserRole
-  }
-];
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
@@ -62,20 +35,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (username: string, password: string): boolean => {
-    const foundUser = MOCK_USERS.find(
-      u => u.username === username && u.password === password
-    );
+    const foundUser = userService.getUserByUsername(username);
 
-    if (foundUser) {
+    if (foundUser && foundUser.password === password) {
+      // Check if user is active
+      if (foundUser.status !== 'active') {
+        return false; // Inactive or suspended users cannot log in
+      }
+
       const user: User = {
         id: foundUser.id,
         username: foundUser.username,
-        name: foundUser.name,
+        name: `${foundUser.firstName} ${foundUser.lastName}`,
         email: foundUser.email,
         role: foundUser.role
       };
       setUser(user);
       localStorage.setItem('user', JSON.stringify(user));
+
+      // Update last login timestamp
+      userService.updateLastLogin(foundUser.id);
+
       return true;
     }
 
