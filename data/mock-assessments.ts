@@ -1,4 +1,5 @@
-import { Assessment, QuestionType } from '@/lib/types/question';
+import { QuestionType } from '@/lib/types/question';
+import { Assessment, AssessmentSection } from '@/lib/types/assessment';
 
 // Original mock assessments - keeping this as the main export for now
 // TODO: Migrate to normalized structure after testing
@@ -10,6 +11,207 @@ export const mockAssessments: Assessment[] = [
     duration: 45,
     totalPoints: 100,
     createdAt: '2024-01-15T10:00:00Z',
+    sections: [
+      {
+        id: 'section-mcq',
+        name: 'Multiple Choice Questions',
+        questionType: QuestionType.MCQ,
+        duration: 10,
+        questions: [
+          {
+            id: 'q1',
+            type: QuestionType.MCQ,
+            text: 'Which of the following is NOT a JavaScript data type?',
+            points: 10,
+            options: [
+              { id: 'a', text: 'String' },
+              { id: 'b', text: 'Boolean' },
+              { id: 'c', text: 'Float' },
+              { id: 'd', text: 'Number' }
+            ],
+            correctAnswers: ['c'],
+            multipleAnswers: false
+          },
+          {
+            id: 'q2',
+            type: QuestionType.MCQ,
+            text: 'Which of the following are valid ways to declare a variable in JavaScript? (Select all that apply)',
+            points: 15,
+            options: [
+              { id: 'a', text: 'var x = 10;' },
+              { id: 'b', text: 'let x = 10;' },
+              { id: 'c', text: 'const x = 10;' },
+              { id: 'd', text: 'int x = 10;' }
+            ],
+            correctAnswers: ['a', 'b', 'c'],
+            multipleAnswers: true
+          }
+        ]
+      },
+      {
+        id: 'section-tf',
+        name: 'True/False Questions',
+        questionType: QuestionType.TRUE_FALSE,
+        duration: 5,
+        questions: [
+          {
+            id: 'q3',
+            type: QuestionType.TRUE_FALSE,
+            text: 'JavaScript is a statically typed language.',
+            points: 5,
+            correctAnswer: false
+          },
+          {
+            id: 'q4',
+            type: QuestionType.TRUE_FALSE,
+            text: 'The === operator checks both value and type in JavaScript.',
+            points: 5,
+            correctAnswer: true
+          }
+        ]
+      },
+      {
+        id: 'section-desc',
+        name: 'Descriptive Questions',
+        questionType: QuestionType.DESCRIPTIVE,
+        duration: 10,
+        questions: [
+          {
+            id: 'q5',
+            type: QuestionType.DESCRIPTIVE,
+            text: 'Explain the difference between "null" and "undefined" in JavaScript.',
+            points: 15,
+            maxLength: 500
+          }
+        ]
+      },
+      {
+        id: 'section-coding',
+        name: 'Coding Challenges',
+        questionType: QuestionType.CODING,
+        duration: 20,
+        questions: [
+          {
+            id: 'q6',
+            type: QuestionType.CODING,
+            text: 'Array Sum',
+            problemStatement: `Write a function that takes an array of numbers and returns their sum.
+
+**Example:**
+Input: [1, 2, 3, 4, 5]
+Output: 15
+
+**Constraints:**
+- The array will contain at least 1 element
+- All elements will be integers`,
+            points: 25,
+            starterCode: {
+              javascript: `function arraySum(arr) {
+  // Write your code here
+
+}`,
+              python: `def array_sum(arr):
+    # Write your code here
+    pass`,
+              cpp: `#include <vector>
+using namespace std;
+
+int arraySum(vector<int> arr) {
+    // Write your code here
+
+}`,
+              java: `public class Solution {
+    public static int arraySum(int[] arr) {
+        // Write your code here
+
+    }
+}`
+            },
+            testCases: [
+              {
+                id: 't1',
+                input: '[1, 2, 3, 4, 5]',
+                expectedOutput: '15',
+                isHidden: false
+              },
+              {
+                id: 't2',
+                input: '[10, -5, 3]',
+                expectedOutput: '8',
+                isHidden: false
+              },
+              {
+                id: 't3',
+                input: '[100]',
+                expectedOutput: '100',
+                isHidden: true
+              }
+            ],
+            allowedLanguages: ['javascript', 'python', 'cpp', 'java']
+          },
+          {
+            id: 'q7',
+            type: QuestionType.CODING,
+            text: 'Palindrome Checker',
+            problemStatement: `Write a function that checks if a given string is a palindrome (reads the same forwards and backwards). Ignore spaces and case.
+
+**Example:**
+Input: "A man a plan a canal Panama"
+Output: true
+
+Input: "hello"
+Output: false
+
+**Constraints:**
+- String length will be between 1 and 1000 characters`,
+            points: 25,
+            starterCode: {
+              javascript: `function isPalindrome(str) {
+  // Write your code here
+
+}`,
+              python: `def is_palindrome(s):
+    # Write your code here
+    pass`,
+              cpp: `#include <string>
+using namespace std;
+
+bool isPalindrome(string str) {
+    // Write your code here
+
+}`,
+              java: `public class Solution {
+    public static boolean isPalindrome(String str) {
+        // Write your code here
+
+    }
+}`
+            },
+            testCases: [
+              {
+                id: 't1',
+                input: 'racecar',
+                expectedOutput: 'true',
+                isHidden: false
+              },
+              {
+                id: 't2',
+                input: 'hello',
+                expectedOutput: 'false',
+                isHidden: false
+              },
+              {
+                id: 't3',
+                input: 'A man a plan a canal Panama',
+                expectedOutput: 'true',
+                isHidden: true
+              }
+            ],
+            allowedLanguages: ['javascript', 'python', 'cpp', 'java']
+          }
+        ]
+      }
+    ],
     questions: [
       {
         id: 'q1',

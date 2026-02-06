@@ -31,6 +31,15 @@ export interface UserAnswer {
   testResults?: TestCaseResult[];  // Store test results
 }
 
+// Track section progress
+export interface SectionProgress {
+  sectionId: string;
+  isCompleted: boolean;
+  startTime?: number;
+  endTime?: number;
+  timeSpent: number; // in seconds
+}
+
 // Assessment result
 export interface AssessmentResult {
   assessmentId: string;
@@ -40,6 +49,7 @@ export interface AssessmentResult {
   percentage: number;
   timeTaken: number; // Time taken in seconds
   submittedAt: string;
+  sectionProgress?: SectionProgress[]; // Track progress for each section
 }
 
 // Code execution result (from Judge0)
