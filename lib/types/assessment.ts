@@ -1,13 +1,23 @@
-import { Question, Answer } from './question';
+import { Question, Answer, QuestionType } from './question';
+
+// Assessment Section interface
+export interface AssessmentSection {
+  id: string;
+  name: string;
+  questionType: QuestionType; // Each section has one question type
+  duration: number; // Duration in minutes for this section
+  questions: Question[];
+}
 
 // Assessment interface
 export interface Assessment {
   id: string;
   title: string;
   description: string;
-  duration: number; // Duration in minutes
+  duration: number; // Total duration (sum of all section durations)
   totalPoints: number;
-  questions: Question[];
+  sections?: AssessmentSection[]; // New section-based structure
+  questions: Question[]; // Legacy flat structure for backward compatibility
   createdAt: string;
 }
 
@@ -21,6 +31,15 @@ export interface UserAnswer {
   testResults?: TestCaseResult[];  // Store test results
 }
 
+// Track section progress
+export interface SectionProgress {
+  sectionId: string;
+  isCompleted: boolean;
+  startTime?: number;
+  endTime?: number;
+  timeSpent: number; // in seconds
+}
+
 // Assessment result
 export interface AssessmentResult {
   assessmentId: string;
@@ -30,6 +49,7 @@ export interface AssessmentResult {
   percentage: number;
   timeTaken: number; // Time taken in seconds
   submittedAt: string;
+  sectionProgress?: SectionProgress[]; // Track progress for each section
 }
 
 // Code execution result (from Judge0)
