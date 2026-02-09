@@ -7,7 +7,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { QuestionType, QuestionDifficulty } from '@/lib/types/question';
 import type { Question, MCQQuestion, TrueFalseQuestion, DescriptiveQuestion, CodingQuestion, MCQOption, TestCase } from '@/lib/types/question';
-import { questionBankService } from '@/lib/services/questionBankService';
+import { questionBankService, PREDEFINED_TOPICS, PREDEFINED_DOMAINS } from '@/app/services/questionBank.service';
 import {
   QuestionFormHeader,
   QuestionFormActions,
@@ -67,106 +67,121 @@ export default function AddQuestionPage() {
   ]);
   const [codingAllowedLanguages, setCodingAllowedLanguages] = useState<string[]>(['javascript', 'python']);
   const [showAdvancedLanguages, setShowAdvancedLanguages] = useState(false);
+  const [saving, setSaving] = useState(false);
 
 
-  const saveQuestion = () => {
-    const questionId = `q${Date.now()}`;
+  const saveQuestion = async () => {
+    if (saving) return; // Prevent double submission
 
-    // Get final topic and domain values
-    const finalTopic = topic === 'custom' ? customTopic : topic;
-    const finalDomain = domain === 'custom' ? customDomain : domain;
+    setSaving(true);
 
-    let newQuestion: Question;
+    try {
+      // Get final topic and domain values
+      const finalTopic = topic === 'custom' ? customTopic : topic;
+      const finalDomain = domain === 'custom' ? customDomain : domain;
 
-    switch (currentQuestionType) {
-      case QuestionType.MCQ:
-        if (!mcqText.trim() || mcqOptions.some(opt => !opt.text.trim()) || mcqCorrectAnswers.length === 0) {
-          alert('Please fill in all required fields and select at least one correct answer.');
-          return;
-        }
-        newQuestion = {
-          id: questionId,
-          type: QuestionType.MCQ,
-          text: mcqText,
-          points: mcqPoints,
-          options: mcqOptions,
-          correctAnswers: mcqCorrectAnswers,
-          multipleAnswers: mcqMultipleAnswers,
-          metadata: {
-            topic: finalTopic || undefined,
-            domain: finalDomain || undefined,
-            difficulty
+      let newQuestion: Question;
+
+      switch (currentQuestionType) {
+        case QuestionType.MCQ:
+          if (!mcqText.trim() || mcqOptions.some(opt => !opt.text.trim()) || mcqCorrectAnswers.length === 0) {
+            alert('Please fill in all required fields and select at least one correct answer.');
+            setSaving(false);
+            return;
           }
-        } as MCQQuestion;
-        break;
+          newQuestion = {
+            id: '', // Backend will generate ID
+            type: QuestionType.MCQ,
+            text: mcqText,
+            points: mcqPoints,
+            options: mcqOptions,
+            correctAnswers: mcqCorrectAnswers,
+            multipleAnswers: mcqMultipleAnswers,
+            metadata: {
+              topic: finalTopic || undefined,
+              domain: finalDomain || undefined,
+              difficulty
+            }
+          } as MCQQuestion;
+          break;
 
-      case QuestionType.TRUE_FALSE:
-        if (!tfText.trim()) {
-          alert('Please fill in the question text.');
-          return;
-        }
-        newQuestion = {
-          id: questionId,
-          type: QuestionType.TRUE_FALSE,
-          text: tfText,
-          points: tfPoints,
-          correctAnswer: tfCorrectAnswer,
-          metadata: {
-            topic: finalTopic || undefined,
-            domain: finalDomain || undefined,
-            difficulty
+        case QuestionType.TRUE_FALSE:
+          if (!tfText.trim()) {
+            alert('Please fill in the question text.');
+            setSaving(false);
+            return;
           }
-        } as TrueFalseQuestion;
-        break;
+          newQuestion = {
+            id: '', // Backend will generate ID
+            type: QuestionType.TRUE_FALSE,
+            text: tfText,
+            points: tfPoints,
+            correctAnswer: tfCorrectAnswer,
+            metadata: {
+              topic: finalTopic || undefined,
+              domain: finalDomain || undefined,
+              difficulty
+            }
+          } as TrueFalseQuestion;
+          break;
 
-      case QuestionType.DESCRIPTIVE:
-        if (!descText.trim()) {
-          alert('Please fill in the question text.');
-          return;
-        }
-        newQuestion = {
-          id: questionId,
-          type: QuestionType.DESCRIPTIVE,
-          text: descText,
-          points: descPoints,
-          maxLength: descMaxLength,
-          metadata: {
-            topic: finalTopic || undefined,
-            domain: finalDomain || undefined,
-            difficulty
+        case QuestionType.DESCRIPTIVE:
+          if (!descText.trim()) {
+            alert('Please fill in the question text.');
+            setSaving(false);
+            return;
           }
-        } as DescriptiveQuestion;
-        break;
+          newQuestion = {
+            id: '', // Backend will generate ID
+            type: QuestionType.DESCRIPTIVE,
+            text: descText,
+            points: descPoints,
+            maxLength: descMaxLength,
+            metadata: {
+              topic: finalTopic || undefined,
+              domain: finalDomain || undefined,
+              difficulty
+            }
+          } as DescriptiveQuestion;
+          break;
 
-      case QuestionType.CODING:
-        if (!codingText.trim() || !codingProblemStatement.trim()) {
-          alert('Please fill in the question title and problem statement.');
-          return;
-        }
-        newQuestion = {
-          id: questionId,
-          type: QuestionType.CODING,
-          text: codingText,
-          problemStatement: codingProblemStatement,
-          points: codingPoints,
-          starterCode: codingStarterCode,
-          testCases: codingTestCases,
-          allowedLanguages: codingAllowedLanguages,
-          metadata: {
-            topic: finalTopic || undefined,
-            domain: finalDomain || undefined,
-            difficulty
+        case QuestionType.CODING:
+          if (!codingText.trim() || !codingProblemStatement.trim()) {
+            alert('Please fill in the question title and problem statement.');
+            setSaving(false);
+            return;
           }
-        } as CodingQuestion;
-        break;
+          newQuestion = {
+            id: '', // Backend will generate ID
+            type: QuestionType.CODING,
+            text: codingText,
+            problemStatement: codingProblemStatement,
+            points: codingPoints,
+            starterCode: codingStarterCode,
+            testCases: codingTestCases,
+            allowedLanguages: codingAllowedLanguages,
+            metadata: {
+              topic: finalTopic || undefined,
+              domain: finalDomain || undefined,
+              difficulty
+            }
+          } as CodingQuestion;
+          break;
 
-      default:
-        return;
+        default:
+          setSaving(false);
+          return;
+      }
+
+      await questionBankService.addQuestion(newQuestion);
+      alert('Question added successfully!');
+      router.push('/admin/question-bank');
+    } catch (error: any) {
+      console.error('Error adding question:', error);
+      alert(`Failed to add question: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
-
-    questionBankService.addQuestion(newQuestion);
-    alert('Question added successfully!');
-    router.push('/admin/question-bank');
   };
 
   return (
@@ -261,7 +276,10 @@ export default function AddQuestionPage() {
             </CardContent>
           </Card>
 
-          <QuestionFormActions onSave={saveQuestion} />
+          <QuestionFormActions
+            onSave={saveQuestion}
+            saveLabel={saving ? 'Saving...' : 'Save Question'}
+          />
         </div>
       </AdminLayout>
     </AdminRoute>

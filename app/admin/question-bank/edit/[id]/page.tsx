@@ -7,7 +7,7 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { QuestionType, QuestionDifficulty } from '@/lib/types/question';
 import type { Question, MCQQuestion, TrueFalseQuestion, DescriptiveQuestion, CodingQuestion, MCQOption, TestCase } from '@/lib/types/question';
-import { questionBankService, PREDEFINED_TOPICS, PREDEFINED_DOMAINS } from '@/lib/services/questionBankService';
+import { questionBankService, PREDEFINED_TOPICS, PREDEFINED_DOMAINS } from '@/app/services/questionBank.service';
 import {
   QuestionFormHeader,
   QuestionFormActions,
@@ -71,177 +71,209 @@ export default function EditQuestionPage() {
   ]);
   const [codingAllowedLanguages, setCodingAllowedLanguages] = useState<string[]>(['javascript', 'python']);
   const [showAdvancedLanguages, setShowAdvancedLanguages] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Load question data
   useEffect(() => {
-    const question = questionBankService.getQuestionById(questionId);
-    if (!question) {
-      alert('Question not found!');
-      router.push('/admin/question-bank');
-      return;
-    }
-
-    // Load metadata
-    if (question.metadata) {
-      setDifficulty(question.metadata.difficulty || QuestionDifficulty.MEDIUM);
-
-      if (question.metadata.topic) {
-        if (PREDEFINED_TOPICS.includes(question.metadata.topic)) {
-          setTopic(question.metadata.topic);
-        } else {
-          setTopic('custom');
-          setCustomTopic(question.metadata.topic);
+    const loadQuestion = async () => {
+      try {
+        const question = await questionBankService.getQuestionById(questionId);
+        if (!question) {
+          alert('Question not found!');
+          router.push('/admin/question-bank');
+          return;
         }
-      }
 
-      if (question.metadata.domain) {
-        if (PREDEFINED_DOMAINS.includes(question.metadata.domain)) {
-          setDomain(question.metadata.domain);
-        } else {
-          setDomain('custom');
-          setCustomDomain(question.metadata.domain);
+        // Load metadata
+        if (question.metadata) {
+          setDifficulty(question.metadata.difficulty || QuestionDifficulty.MEDIUM);
+
+          if (question.metadata.topic) {
+            if (PREDEFINED_TOPICS.includes(question.metadata.topic)) {
+              setTopic(question.metadata.topic);
+            } else {
+              setTopic('custom');
+              setCustomTopic(question.metadata.topic);
+            }
+          }
+
+          if (question.metadata.domain) {
+            if (PREDEFINED_DOMAINS.includes(question.metadata.domain)) {
+              setDomain(question.metadata.domain);
+            } else {
+              setDomain('custom');
+              setCustomDomain(question.metadata.domain);
+            }
+          }
         }
+
+        // Load question type and data
+        setCurrentQuestionType(question.type);
+
+        switch (question.type) {
+          case QuestionType.MCQ:
+            const mcq = question as MCQQuestion;
+            setMcqText(mcq.text);
+            setMcqPoints(mcq.points);
+            setMcqOptions(mcq.options);
+            setMcqCorrectAnswers(mcq.correctAnswers);
+            setMcqMultipleAnswers(mcq.multipleAnswers);
+            break;
+
+          case QuestionType.TRUE_FALSE:
+            const tf = question as TrueFalseQuestion;
+            setTfText(tf.text);
+            setTfPoints(tf.points);
+            setTfCorrectAnswer(tf.correctAnswer);
+            break;
+
+          case QuestionType.DESCRIPTIVE:
+            const desc = question as DescriptiveQuestion;
+            setDescText(desc.text);
+            setDescPoints(desc.points);
+            setDescMaxLength(desc.maxLength);
+            break;
+
+          case QuestionType.CODING:
+            const coding = question as CodingQuestion;
+            setCodingText(coding.text);
+            setCodingProblemStatement(coding.problemStatement);
+            setCodingPoints(coding.points);
+            setCodingStarterCode({
+              javascript: coding.starterCode.javascript || '',
+              python: coding.starterCode.python || '',
+              cpp: coding.starterCode.cpp || '',
+              java: coding.starterCode.java || ''
+            });
+            setCodingTestCases(coding.testCases);
+            setCodingAllowedLanguages(coding.allowedLanguages);
+            break;
+        }
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading question:', error);
+        alert('Failed to load question. Please try again.');
+        router.push('/admin/question-bank');
       }
-    }
+    };
 
-    // Load question type and data
-    setCurrentQuestionType(question.type);
-
-    switch (question.type) {
-      case QuestionType.MCQ:
-        const mcq = question as MCQQuestion;
-        setMcqText(mcq.text);
-        setMcqPoints(mcq.points);
-        setMcqOptions(mcq.options);
-        setMcqCorrectAnswers(mcq.correctAnswers);
-        setMcqMultipleAnswers(mcq.multipleAnswers);
-        break;
-
-      case QuestionType.TRUE_FALSE:
-        const tf = question as TrueFalseQuestion;
-        setTfText(tf.text);
-        setTfPoints(tf.points);
-        setTfCorrectAnswer(tf.correctAnswer);
-        break;
-
-      case QuestionType.DESCRIPTIVE:
-        const desc = question as DescriptiveQuestion;
-        setDescText(desc.text);
-        setDescPoints(desc.points);
-        setDescMaxLength(desc.maxLength);
-        break;
-
-      case QuestionType.CODING:
-        const coding = question as CodingQuestion;
-        setCodingText(coding.text);
-        setCodingProblemStatement(coding.problemStatement);
-        setCodingPoints(coding.points);
-        setCodingStarterCode(coding.starterCode);
-        setCodingTestCases(coding.testCases);
-        setCodingAllowedLanguages(coding.allowedLanguages);
-        break;
-    }
-
-    setLoading(false);
+    loadQuestion();
   }, [questionId, router]);
 
 
-  const updateQuestion = () => {
-    // Get final topic and domain values
-    const finalTopic = topic === 'custom' ? customTopic : topic;
-    const finalDomain = domain === 'custom' ? customDomain : domain;
+  const updateQuestion = async () => {
+    if (saving) return; // Prevent double submission
 
-    let updatedQuestion: Question;
+    setSaving(true);
 
-    switch (currentQuestionType) {
-      case QuestionType.MCQ:
-        if (!mcqText.trim() || mcqOptions.some(opt => !opt.text.trim()) || mcqCorrectAnswers.length === 0) {
-          alert('Please fill in all required fields and select at least one correct answer.');
-          return;
-        }
-        updatedQuestion = {
-          id: questionId,
-          type: QuestionType.MCQ,
-          text: mcqText,
-          points: mcqPoints,
-          options: mcqOptions,
-          correctAnswers: mcqCorrectAnswers,
-          multipleAnswers: mcqMultipleAnswers,
-          metadata: {
-            topic: finalTopic || undefined,
-            domain: finalDomain || undefined,
-            difficulty
+    try {
+      // Get final topic and domain values
+      const finalTopic = topic === 'custom' ? customTopic : topic;
+      const finalDomain = domain === 'custom' ? customDomain : domain;
+
+      let updatedQuestion: Question;
+
+      switch (currentQuestionType) {
+        case QuestionType.MCQ:
+          if (!mcqText.trim() || mcqOptions.some(opt => !opt.text.trim()) || mcqCorrectAnswers.length === 0) {
+            alert('Please fill in all required fields and select at least one correct answer.');
+            setSaving(false);
+            return;
           }
-        } as MCQQuestion;
-        break;
+          updatedQuestion = {
+            id: questionId,
+            type: QuestionType.MCQ,
+            text: mcqText,
+            points: mcqPoints,
+            options: mcqOptions,
+            correctAnswers: mcqCorrectAnswers,
+            multipleAnswers: mcqMultipleAnswers,
+            metadata: {
+              topic: finalTopic || undefined,
+              domain: finalDomain || undefined,
+              difficulty
+            }
+          } as MCQQuestion;
+          break;
 
-      case QuestionType.TRUE_FALSE:
-        if (!tfText.trim()) {
-          alert('Please fill in the question text.');
-          return;
-        }
-        updatedQuestion = {
-          id: questionId,
-          type: QuestionType.TRUE_FALSE,
-          text: tfText,
-          points: tfPoints,
-          correctAnswer: tfCorrectAnswer,
-          metadata: {
-            topic: finalTopic || undefined,
-            domain: finalDomain || undefined,
-            difficulty
+        case QuestionType.TRUE_FALSE:
+          if (!tfText.trim()) {
+            alert('Please fill in the question text.');
+            setSaving(false);
+            return;
           }
-        } as TrueFalseQuestion;
-        break;
+          updatedQuestion = {
+            id: questionId,
+            type: QuestionType.TRUE_FALSE,
+            text: tfText,
+            points: tfPoints,
+            correctAnswer: tfCorrectAnswer,
+            metadata: {
+              topic: finalTopic || undefined,
+              domain: finalDomain || undefined,
+              difficulty
+            }
+          } as TrueFalseQuestion;
+          break;
 
-      case QuestionType.DESCRIPTIVE:
-        if (!descText.trim()) {
-          alert('Please fill in the question text.');
-          return;
-        }
-        updatedQuestion = {
-          id: questionId,
-          type: QuestionType.DESCRIPTIVE,
-          text: descText,
-          points: descPoints,
-          maxLength: descMaxLength,
-          metadata: {
-            topic: finalTopic || undefined,
-            domain: finalDomain || undefined,
-            difficulty
+        case QuestionType.DESCRIPTIVE:
+          if (!descText.trim()) {
+            alert('Please fill in the question text.');
+            setSaving(false);
+            return;
           }
-        } as DescriptiveQuestion;
-        break;
+          updatedQuestion = {
+            id: questionId,
+            type: QuestionType.DESCRIPTIVE,
+            text: descText,
+            points: descPoints,
+            maxLength: descMaxLength,
+            metadata: {
+              topic: finalTopic || undefined,
+              domain: finalDomain || undefined,
+              difficulty
+            }
+          } as DescriptiveQuestion;
+          break;
 
-      case QuestionType.CODING:
-        if (!codingText.trim() || !codingProblemStatement.trim()) {
-          alert('Please fill in the question title and problem statement.');
-          return;
-        }
-        updatedQuestion = {
-          id: questionId,
-          type: QuestionType.CODING,
-          text: codingText,
-          problemStatement: codingProblemStatement,
-          points: codingPoints,
-          starterCode: codingStarterCode,
-          testCases: codingTestCases,
-          allowedLanguages: codingAllowedLanguages,
-          metadata: {
-            topic: finalTopic || undefined,
-            domain: finalDomain || undefined,
-            difficulty
+        case QuestionType.CODING:
+          if (!codingText.trim() || !codingProblemStatement.trim()) {
+            alert('Please fill in the question title and problem statement.');
+            setSaving(false);
+            return;
           }
-        } as CodingQuestion;
-        break;
+          updatedQuestion = {
+            id: questionId,
+            type: QuestionType.CODING,
+            text: codingText,
+            problemStatement: codingProblemStatement,
+            points: codingPoints,
+            starterCode: codingStarterCode,
+            testCases: codingTestCases,
+            allowedLanguages: codingAllowedLanguages,
+            metadata: {
+              topic: finalTopic || undefined,
+              domain: finalDomain || undefined,
+              difficulty
+            }
+          } as CodingQuestion;
+          break;
 
-      default:
-        return;
+        default:
+          setSaving(false);
+          return;
+      }
+
+      await questionBankService.updateQuestion(questionId, updatedQuestion);
+      alert('Question updated successfully!');
+      router.push('/admin/question-bank');
+    } catch (error: any) {
+      console.error('Error updating question:', error);
+      alert(`Failed to update question: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
-
-    questionBankService.updateQuestion(questionId, updatedQuestion);
-    alert('Question updated successfully!');
-    router.push('/admin/question-bank');
   };
 
   if (loading) {
@@ -350,7 +382,7 @@ export default function EditQuestionPage() {
 
           <QuestionFormActions
             onSave={updateQuestion}
-            saveLabel="Update Question"
+            saveLabel={saving ? 'Updating...' : 'Update Question'}
           />
         </div>
       </AdminLayout>
