@@ -7,7 +7,9 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Save } from 'lucide-react';
 import { QuestionType } from '@/lib/types/question';
-import type { Assessment } from '@/lib/types/assessment';
+import { assessmentService } from '@/lib/services/assessmentService';
+import type { AssessmentCreatePayload } from '@/lib/services/assessmentService';
+import { questionBankService } from '@/lib/services/questionBankService';
 
 // Import reusable components
 import {
@@ -41,14 +43,28 @@ export default function CreateAssessmentPage() {
   const questionForms = useQuestionForms();
   const questionBank = useQuestionBank();
 
-  const handleAddQuestion = () => {
+  const handleAddQuestion = async () => {
     if (!sectionManager.currentSection) return;
 
     const question = questionForms.buildQuestion(sectionManager.currentSection.questionType);
-    if (question) {
-      sectionManager.addQuestionToSection(question);
+    if (!question) return;
+
+    try {
+      console.log('[CreateAssessment] Question built with temp ID:', question.id);
+
+      // Save question to backend first
+      const savedQuestion = await questionBankService.createQuestion(question);
+
+      console.log('[CreateAssessment] Question saved with backend ID:', savedQuestion.id);
+      console.log('[CreateAssessment] Saved question data:', savedQuestion);
+
+      // Add the saved question (with real ID) to the section
+      sectionManager.addQuestionToSection(savedQuestion);
       questionForms.resetForm();
       setShowQuestionForm(false);
+    } catch (error: any) {
+      console.error('Error saving question:', error);
+      alert(`Failed to save question: ${error.response?.data?.detail || error.message}`);
     }
   };
 
@@ -69,7 +85,7 @@ export default function CreateAssessmentPage() {
     }
   };
 
-  const saveAssessment = () => {
+  const saveAssessment = async () => {
     if (!title.trim()) {
       alert('Please enter an assessment title.');
       return;
@@ -85,30 +101,28 @@ export default function CreateAssessmentPage() {
       return;
     }
 
-    // Calculate totals
-    const totalDuration = sectionManager.getTotalDuration();
-    const totalPoints = sectionManager.getTotalPoints();
+    try {
+      const payload: AssessmentCreatePayload = {
+        title,
+        description,
+        sections: sectionManager.sections.map(section => ({
+          name: section.name,
+          duration: section.duration,
+          questionType: section.questionType,
+          questions: section.questions.map(q => q.id) // Send question IDs
+        }))
+      };
 
-    // Flatten questions for backward compatibility
-    const allQuestions = sectionManager.sections.flatMap(s => s.questions);
+      console.log('[CreateAssessment] Saving assessment with payload:', payload);
+      console.log('[CreateAssessment] Section question IDs:', payload.sections.map(s => ({ section: s.name, questionIds: s.questions })));
 
-    const newAssessment: Assessment = {
-      id: String(Date.now()),
-      title,
-      description,
-      duration: totalDuration,
-      totalPoints,
-      sections: sectionManager.sections,
-      questions: allQuestions,
-      createdAt: new Date().toISOString()
-    };
-
-    // Store in localStorage
-    const existingAssessments = JSON.parse(localStorage.getItem('custom_assessments') || '[]');
-    localStorage.setItem('custom_assessments', JSON.stringify([...existingAssessments, newAssessment]));
-
-    alert('Assessment created successfully!');
-    router.push('/admin/assessments');
+      const created = await assessmentService.createAssessment(payload);
+      alert(`Assessment created successfully! ID: ${created.id}`);
+      router.push('/admin/assessments');
+    } catch (error: any) {
+      console.error('Error creating assessment:', error);
+      alert(`Failed to create assessment: ${error.response?.data?.detail || error.message}`);
+    }
   };
 
   return (

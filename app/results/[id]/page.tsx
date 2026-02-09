@@ -8,26 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
-import { getAssessmentById } from '@/data/mock-assessments';
+import { assessmentService } from '@/lib/services/assessmentService';
+import { testTakingService, type GradingResult } from '@/app/services/testTaking.service';
 import { UserAnswer } from '@/lib/types/assessment';
-import { calculateScore, formatTime, checkAnswer } from '@/lib/utils/helpers';
-import { QuestionType, MCQQuestion, TrueFalseQuestion, CodingQuestion, MCQAnswer, TrueFalseAnswer, CodingAnswer, Question } from '@/lib/types/question';
+import { formatTime } from '@/lib/utils/helpers';
 import { CheckCircle2, XCircle, Award, Clock, FileText, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
-import CodeOutputPanel from '@/components/code-editor/CodeOutputPanel';
-import { ViolationReview } from '@/components/security/ViolationReview';
 
 export default function ResultsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   const { isAuthenticated } = useAuth();
-  const assessment = getAssessmentById(id);
-
-  const [result, setResult] = useState<{
-    userAnswers: UserAnswer[];
-    timeTaken: number;
-  } | null>(null);
-  const [codingScores, setCodingScores] = useState<{ [key: string]: number }>({});
+  const [assessment, setAssessment] = useState<any>(null);
+  const [gradingResult, setGradingResult] = useState<GradingResult | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -35,20 +29,36 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
       return;
     }
 
-    // Load result from sessionStorage
-    const resultData = sessionStorage.getItem(`assessment_result_${id}`);
-    if (resultData) {
-      const parsed = JSON.parse(resultData);
-      setResult(parsed);
-      setCodingScores(parsed.codingScores || {});
-    }
+    const loadResults = async () => {
+      try {
+        // Load result from sessionStorage
+        const resultData = sessionStorage.getItem(`assessment_result_${id}`);
+        if (!resultData) {
+          router.push('/assessments');
+          return;
+        }
+
+        const parsed = JSON.parse(resultData);
+        setGradingResult(parsed.gradingResult);
+
+        // Load assessment details
+        const assessmentData = await assessmentService.getAssessmentById(id);
+        setAssessment(assessmentData);
+      } catch (error) {
+        console.error('Error loading results:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadResults();
   }, [id, isAuthenticated, router]);
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || loading) {
     return null;
   }
 
-  if (!assessment || !result) {
+  if (!assessment || !gradingResult) {
     return (
       <div className="container mx-auto px-4 py-12 text-center">
         <h1 className="text-2xl font-bold">Results not found</h1>
@@ -60,7 +70,7 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
     );
   }
 
-  const { score, totalPoints, percentage } = calculateScore(assessment.questions, result.userAnswers, codingScores);
+  const { total_score, max_score, percentage } = gradingResult;
   const isPassed = percentage >= 60;
 
   return (
@@ -89,10 +99,10 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
           <CardContent className="space-y-4">
             <div className="text-center space-y-2">
               <div className="text-5xl font-bold">
-                {score} / {totalPoints}
+                {total_score.toFixed(1)} / {max_score}
               </div>
               <div className="text-2xl text-muted-foreground">
-                {percentage}%
+                {percentage.toFixed(1)}%
               </div>
               <Badge variant={isPassed ? 'default' : 'secondary'} className="text-lg px-4 py-1">
                 {isPassed ? 'Passed' : 'Not Passed'}
@@ -104,209 +114,131 @@ export default function ResultsPage({ params }: { params: Promise<{ id: string }
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
-                  <Clock className="w-4 h-4" />
-                  <span className="text-sm">Time Taken</span>
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span className="text-sm">Correct Answers</span>
                 </div>
-                <div className="text-xl font-semibold">{formatTime(result.timeTaken)}</div>
+                <div className="text-xl font-semibold">
+                  {gradingResult.answers.filter(a => a.is_correct === 'correct').length} / {gradingResult.answers.length}
+                </div>
               </div>
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <FileText className="w-4 h-4" />
-                  <span className="text-sm">Questions</span>
+                  <span className="text-sm">Total Questions</span>
                 </div>
                 <div className="text-xl font-semibold">
-                  {result.userAnswers.filter(ua => ua.isAnswered).length} / {assessment.questions.length}
+                  {gradingResult.answers.length}
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        {/* Question Review */}
+        {/* Answer Summary */}
         <div className="space-y-4">
-          <h2 className="text-2xl font-bold">Question Review</h2>
+          <h2 className="text-2xl font-bold">Answer Summary</h2>
 
-          {assessment.questions.map((question: Question, index: number) => {
-            const userAnswer = result.userAnswers.find((ua: UserAnswer) => ua.questionId === question.id);
-            const isCorrect = userAnswer ? checkAnswer(question, userAnswer.answer) : false;
-            const wasAnswered = userAnswer?.isAnswered || false;
+          {gradingResult.answers.map((answer, index: number) => {
+            const isCorrect = answer.is_correct === 'correct';
+            const isPending = answer.is_correct === 'pending';
 
             return (
-              <Card key={question.id}>
+              <Card key={answer.question_id || index}>
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-semibold">Question {index + 1}</span>
-                        <Badge variant="outline">
-                          {question.type === 'mcq' ? 'MCQ' :
-                           question.type === 'true_false' ? 'True/False' :
-                           question.type === 'descriptive' ? 'Descriptive' :
-                           'Coding'}
-                        </Badge>
-                        <Badge variant="secondary">{question.points} points</Badge>
+                        <Badge variant="secondary">{answer.max_points} points</Badge>
                       </div>
-                      <CardTitle className="text-lg">{question.text}</CardTitle>
+                      <p className="font-medium text-lg mt-1">{answer.question_text}</p>
                     </div>
-                    {(question.type === QuestionType.MCQ || question.type === QuestionType.TRUE_FALSE) && (
-                      <Badge variant={isCorrect ? 'default' : 'destructive'} className="gap-1">
-                        {isCorrect ? (
-                          <>
-                            <CheckCircle2 className="w-4 h-4" />
-                            Correct
-                          </>
-                        ) : (
-                          <>
-                            <XCircle className="w-4 h-4" />
-                            {wasAnswered ? 'Incorrect' : 'Not Answered'}
-                          </>
-                        )}
-                      </Badge>
-                    )}
+                    <Badge variant={isCorrect ? 'default' : isPending ? 'secondary' : 'destructive'} className="gap-1 shrink-0">
+                      {isCorrect ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          Correct (+{answer.points_earned} pts)
+                        </>
+                      ) : isPending ? (
+                        <>
+                          <Clock className="w-4 h-4" />
+                          Pending Review
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-4 h-4" />
+                          Incorrect
+                        </>
+                      )}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {/* MCQ Question */}
-                  {question.type === QuestionType.MCQ && (
+                  {/* MCQ Options */}
+                  {answer.question_type === 'mcq' && answer.options && (
                     <div className="space-y-2">
-                      {(question as MCQQuestion).options.map((option) => {
-                        const userSelection = (userAnswer?.answer as MCQAnswer) || [];
-                        const isCorrectOption = (question as MCQQuestion).correctAnswers.includes(option.id);
-                        const isUserSelection = userSelection.includes(option.id);
+                      {answer.options.map((opt) => {
+                        const isSelected = Array.isArray(answer.user_answer)
+                          ? answer.user_answer.includes(opt.id)
+                          : answer.user_answer === opt.id;
+                        const isCorrectOption = opt.is_correct;
+
+                        let borderClass = "border-border";
+                        let bgClass = "bg-card";
+                        let icon = null;
+
+                        if (isCorrectOption) {
+                          borderClass = "border-green-500";
+                          bgClass = "bg-green-500/10";
+                          icon = <CheckCircle2 className="w-4 h-4 text-green-500" />;
+                        } else if (isSelected && !isCorrectOption) {
+                          borderClass = "border-red-500";
+                          bgClass = "bg-red-500/10";
+                          icon = <XCircle className="w-4 h-4 text-red-500" />;
+                        } else if (isSelected) {
+                          // Selected and correct (handled above generally, but explicit case for clarity)
+                          borderClass = "border-green-500";
+                          bgClass = "bg-green-500/10";
+                          icon = <CheckCircle2 className="w-4 h-4 text-green-500" />;
+                        }
 
                         return (
-                          <div
-                            key={option.id}
-                            className={`p-3 rounded-md border ${
-                              isCorrectOption
-                                ? 'bg-green-50 border-green-500'
-                                : isUserSelection
-                                ? 'bg-red-50 border-red-500'
-                                : 'bg-muted'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between">
-                              <span>{option.text}</span>
-                              {isCorrectOption && (
-                                <Badge variant="default">Correct Answer</Badge>
-                              )}
-                              {isUserSelection && !isCorrectOption && (
-                                <Badge variant="destructive">Your Answer</Badge>
-                              )}
-                            </div>
+                          <div key={opt.id} className={`p-3 rounded-lg border flex items-center justify-between ${borderClass} ${bgClass}`}>
+                            <span>{opt.text}</span>
+                            {icon}
                           </div>
                         );
                       })}
                     </div>
                   )}
 
-                  {/* True/False Question */}
-                  {question.type === QuestionType.TRUE_FALSE && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-4">
-                        {[true, false].map((value) => {
-                          const isCorrectOption = (question as TrueFalseQuestion).correctAnswer === value;
-                          const isUserSelection = (userAnswer?.answer as TrueFalseAnswer) === value;
+                  {/* True/False */}
+                  {answer.question_type === 'true_false' && (
+                    <div className="flex gap-4">
+                      {[true, false].map((val) => {
+                        const isSelected = answer.user_answer === val;
+                        const isCorrectAnswer = answer.correct_answer === val;
 
-                          return (
-                            <div
-                              key={value.toString()}
-                              className={`p-3 rounded-md border text-center ${
-                                isCorrectOption
-                                  ? 'bg-green-50 border-green-500'
-                                  : isUserSelection
-                                  ? 'bg-red-50 border-red-500'
-                                  : 'bg-muted'
-                              }`}
-                            >
-                              <div className="font-semibold">{value ? 'True' : 'False'}</div>
-                              {isCorrectOption && (
-                                <Badge variant="default" className="mt-2">Correct Answer</Badge>
-                              )}
-                              {isUserSelection && !isCorrectOption && (
-                                <Badge variant="destructive" className="mt-2">Your Answer</Badge>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                        let classes = "border-border";
+                        if (isCorrectAnswer) classes = "border-green-500 bg-green-500/10";
+                        else if (isSelected && !isCorrectAnswer) classes = "border-red-500 bg-red-500/10";
 
-                  {/* Descriptive Question */}
-                  {question.type === QuestionType.DESCRIPTIVE && userAnswer && (
-                    <div className="space-y-2">
-                      <div className="font-semibold">Your Answer:</div>
-                      <div className="p-4 bg-muted rounded-md whitespace-pre-wrap">
-                        {(userAnswer.answer as string) || '(No answer provided)'}
-                      </div>
-                      <p className="text-sm text-muted-foreground italic">
-                        Descriptive answers require manual grading
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Coding Question */}
-                  {question.type === QuestionType.CODING && userAnswer && (
-                    <div className="space-y-4">
-                      <div>
-                        <div className="font-semibold mb-2">Your Solution:</div>
-                        <div className="bg-muted p-4 rounded-md">
-                          <div className="text-xs text-muted-foreground mb-2">
-                            Language: {(userAnswer.answer as CodingAnswer).language}
+                        return (
+                          <div key={String(val)} className={`p-3 rounded-lg border flex-1 text-center font-medium ${classes}`}>
+                            {val ? 'True' : 'False'} {isSelected && "(Your Answer)"}
                           </div>
-                          <pre className="text-sm overflow-x-auto">
-                            <code>{(userAnswer.answer as CodingAnswer).code || '(No code submitted)'}</code>
-                          </pre>
-                        </div>
-                      </div>
-
-                      {/* Display score if available */}
-                      {codingScores[question.id] !== undefined && (
-                        <div className="p-4 bg-muted rounded-md">
-                          <div className="font-semibold mb-1">Score</div>
-                          <div className="text-lg">
-                            {codingScores[question.id].toFixed(1)} / {question.points} points
-                            <span className="text-sm text-muted-foreground ml-2">
-                              ({Math.round((codingScores[question.id] / question.points) * 100)}%)
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Display test results if available */}
-                      {(userAnswer.answer as any)._testResults && (
-                        <div>
-                          <div className="font-semibold mb-2">Test Results:</div>
-                          <CodeOutputPanel
-                            results={(userAnswer.answer as any)._testResults}
-                            isLoading={false}
-                          />
-                        </div>
-                      )}
-
-                      {!codingScores[question.id] && !(userAnswer.answer as any)._testResults && (
-                        <p className="text-sm text-muted-foreground italic">
-                          Coding questions are evaluated based on test case execution
-                        </p>
-                      )}
+                        )
+                      })}
                     </div>
                   )}
 
-                  {!wasAnswered && (
-                    <p className="text-sm text-muted-foreground italic">
-                      This question was not answered
-                    </p>
-                  )}
+                  <div className="text-sm text-muted-foreground pt-2 border-t mt-2">
+                    Points Earned: {answer.points_earned} / {answer.max_points}
+                  </div>
                 </CardContent>
               </Card>
             );
           })}
-        </div>
-
-        {/* Security Violations Review */}
-        <div className="mt-8">
-          <ViolationReview assessmentId={id} />
         </div>
 
         {/* Actions */}

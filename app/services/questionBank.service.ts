@@ -36,6 +36,7 @@ function transformToBackendFormat(question: Question): BackendQuestionCreate {
     case QuestionType.MCQ:
       const mcq = question as MCQQuestion;
       questionData = {
+        type: 'mcq',
         options: mcq.options.map((opt) => ({
           id: opt.id,
           text: opt.text,
@@ -48,6 +49,7 @@ function transformToBackendFormat(question: Question): BackendQuestionCreate {
     case QuestionType.TRUE_FALSE:
       const tf = question as TrueFalseQuestion;
       questionData = {
+        type: 'true_false',
         correct_answer: tf.correctAnswer,
       };
       break;
@@ -55,6 +57,7 @@ function transformToBackendFormat(question: Question): BackendQuestionCreate {
     case QuestionType.DESCRIPTIVE:
       const desc = question as DescriptiveQuestion;
       questionData = {
+        type: 'descriptive',
         max_length: desc.maxLength || null,
         expected_keywords: null,
         reference_answer: null,
@@ -64,6 +67,7 @@ function transformToBackendFormat(question: Question): BackendQuestionCreate {
     case QuestionType.CODING:
       const coding = question as CodingQuestion;
       questionData = {
+        type: 'coding',
         problem_statement: coding.problemStatement,
         starter_code: coding.starterCode,
         test_cases: coding.testCases.map((tc) => ({

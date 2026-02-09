@@ -2,62 +2,82 @@ import { questionBankService } from '@/lib/services/questionBankService';
 import { allSampleQuestions } from '@/lib/data/sampleQuestions';
 
 /**
- * Seeds the question bank with sample questions if it's empty
+ * Seeds the question bank with sample questions
  */
-export function seedQuestionBank(): void {
-  const existingQuestions = questionBankService.getAllQuestions();
+export async function seedQuestionBank(): Promise<void> {
+  try {
+    const existingQuestions = await questionBankService.getAllQuestions();
 
-  // Only seed if the question bank is empty
-  if (existingQuestions.length === 0) {
-    console.log('Question bank is empty. Seeding with sample questions...');
+    console.log(`Current question count: ${existingQuestions.length}`);
+    console.log('Adding sample questions...');
 
-    allSampleQuestions.forEach(question => {
-      questionBankService.addQuestion(question);
-    });
+    for (const question of allSampleQuestions) {
+      try {
+        await questionBankService.addQuestion(question);
+        console.log(`Added question: ${question.text.substring(0, 50)}...`);
+      } catch (error: any) {
+        console.error(`Failed to add question: ${error.message}`);
+      }
+    }
 
-    console.log(`Successfully seeded ${allSampleQuestions.length} questions to the question bank!`);
+    console.log(`Successfully attempted to seed ${allSampleQuestions.length} questions!`);
     console.log('Breakdown:');
     console.log('- 10 MCQ questions');
     console.log('- 10 True/False questions');
     console.log('- 10 Descriptive questions');
     console.log('- 10 Coding questions');
-  } else {
-    console.log(`Question bank already has ${existingQuestions.length} questions. Skipping seed.`);
+  } catch (error: any) {
+    console.error('Error seeding questions:', error);
+    throw error;
   }
 }
 
 /**
  * Seeds sample questions without duplicates (checks existing IDs)
  */
-export function seedWithoutDuplicates(): number {
-  const existingQuestions = questionBankService.getAllQuestions();
-  const existingIds = new Set(existingQuestions.map(q => q.id));
+export async function seedWithoutDuplicates(): Promise<number> {
+  try {
+    const existingQuestions = await questionBankService.getAllQuestions();
+    const existingIds = new Set(existingQuestions.map(q => q.id));
 
-  let addedCount = 0;
-  allSampleQuestions.forEach(question => {
-    if (!existingIds.has(question.id)) {
-      questionBankService.addQuestion(question);
-      addedCount++;
+    let addedCount = 0;
+    for (const question of allSampleQuestions) {
+      if (!existingIds.has(question.id)) {
+        try {
+          await questionBankService.addQuestion(question);
+          addedCount++;
+        } catch (error: any) {
+          console.error(`Failed to add question ${question.id}:`, error.message);
+        }
+      }
     }
-  });
 
-  console.log(`Added ${addedCount} new questions (skipped ${allSampleQuestions.length - addedCount} duplicates)`);
-  return addedCount;
+    console.log(`Added ${addedCount} new questions (skipped ${allSampleQuestions.length - addedCount} duplicates)`);
+    return addedCount;
+  } catch (error: any) {
+    console.error('Error seeding without duplicates:', error);
+    throw error;
+  }
 }
 
 /**
- * Force seeds the question bank (replaces all existing questions)
+ * Force seeds the question bank (adds all sample questions)
  */
-export function forceSeedQuestionBank(): void {
-  console.log('Force seeding question bank...');
+export async function forceSeedQuestionBank(): Promise<void> {
+  try {
+    console.log('Force seeding question bank...');
 
-  // Clear existing questions by setting empty array
-  localStorage.setItem('question_bank', JSON.stringify([]));
+    for (const question of allSampleQuestions) {
+      try {
+        await questionBankService.addQuestion(question);
+      } catch (error: any) {
+        console.error(`Failed to add question: ${error.message}`);
+      }
+    }
 
-  // Add all sample questions
-  allSampleQuestions.forEach(question => {
-    questionBankService.addQuestion(question);
-  });
-
-  console.log(`Successfully force seeded ${allSampleQuestions.length} questions to the question bank!`);
+    console.log(`Force seeded ${allSampleQuestions.length} questions!`);
+  } catch (error: any) {
+    console.error('Error force seeding:', error);
+    throw error;
+  }
 }

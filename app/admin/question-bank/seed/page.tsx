@@ -17,57 +17,93 @@ export default function SeedQuestionsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const questions = questionBankService.getAllQuestions();
-    setCurrentCount(questions.length);
+    loadCount();
   }, []);
 
-  const handleSeedAll = () => {
-    setLoading(true);
-
-    // Get existing questions to check for duplicates
-    const existingQuestions = questionBankService.getAllQuestions();
-    const existingIds = new Set(existingQuestions.map(q => q.id));
-
-    // Add only questions that don't already exist
-    let addedCount = 0;
-    allSampleQuestions.forEach(question => {
-      if (!existingIds.has(question.id)) {
-        questionBankService.addQuestion(question);
-        addedCount++;
-      }
-    });
-
-    const newCount = questionBankService.getAllQuestions().length;
-    setCurrentCount(newCount);
-    setSeeded(true);
-    setLoading(false);
-
-    if (addedCount === 0) {
-      alert('All sample questions are already in the question bank!');
-    } else {
-      alert(`Successfully added ${addedCount} new questions to the question bank!`);
+  const loadCount = async () => {
+    try {
+      const questions = await questionBankService.getAllQuestions();
+      setCurrentCount(questions.length);
+    } catch (error) {
+      console.error('Error loading count:', error);
     }
   };
 
-  const handleClearAndSeed = () => {
+  const handleSeedAll = async () => {
+    setLoading(true);
+
+    try {
+      // Get existing questions to check for duplicates
+      const existingQuestions = await questionBankService.getAllQuestions();
+      const existingIds = new Set(existingQuestions.map(q => q.id));
+
+      // Add only questions that don't already exist
+      let addedCount = 0;
+      for (const question of allSampleQuestions) {
+        if (!existingIds.has(question.id)) {
+          try {
+            await questionBankService.addQuestion(question);
+            addedCount++;
+          } catch (err) {
+            console.error('Error adding question:', err);
+          }
+        }
+      }
+
+      await loadCount();
+      setSeeded(true);
+
+      if (addedCount === 0) {
+        alert('All sample questions are already in the question bank!');
+      } else {
+        alert(`Successfully added ${addedCount} new questions to the question bank!`);
+      }
+    } catch (error: any) {
+      alert(`Error seeding questions: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearAndSeed = async () => {
     if (!confirm('This will DELETE all existing questions and add 40 sample questions. Are you sure?')) {
       return;
     }
 
     setLoading(true);
 
-    // Clear all questions
-    localStorage.setItem('question_bank', JSON.stringify([]));
+    try {
+      // Get all existing questions
+      const existingQuestions = await questionBankService.getAllQuestions();
 
-    // Add all sample questions
-    allSampleQuestions.forEach(question => {
-      questionBankService.addQuestion(question);
-    });
+      // Delete all existing questions
+      for (const question of existingQuestions) {
+        try {
+          await questionBankService.deleteQuestion(question.id);
+        } catch (err) {
+          console.error('Error deleting question:', err);
+        }
+      }
 
-    const newCount = questionBankService.getAllQuestions().length;
-    setCurrentCount(newCount);
-    setSeeded(true);
-    setLoading(false);
+      // Add all sample questions
+      let addedCount = 0;
+      for (const question of allSampleQuestions) {
+        try {
+          await questionBankService.addQuestion(question);
+          addedCount++;
+        } catch (err) {
+          console.error('Error adding question:', err);
+        }
+      }
+
+      await loadCount();
+      setSeeded(true);
+      alert(`Successfully seeded ${addedCount} questions!`);
+    } catch (error: any) {
+      alert(`Error: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

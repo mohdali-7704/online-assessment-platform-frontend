@@ -1,0 +1,129 @@
+import apiClient from '@/app/api';
+
+// Backend API response types (snake_case from backend)
+interface BackendAssessmentResponse {
+  id: string;
+  title: string;
+  description: string | null;
+  total_duration: number;
+  total_points: number;
+  status: string;
+  created_at: string;
+}
+
+// Backend API request types (snake_case for backend)
+interface BackendAssessmentCreate {
+  title: string;
+  description?: string | null;
+  sections: any[];
+}
+
+// Frontend types
+export interface Assessment {
+  id: string;
+  title: string;
+  description?: string | null;
+  duration: number; // Maps to total_duration
+  totalPoints: number;
+  status: string;
+  createdAt?: string;
+  sections?: any[]; // Keep for compatibility
+  questions?: any[]; // Keep for compatibility
+}
+
+export interface AssessmentCreatePayload {
+  title: string;
+  description?: string | null;
+  sections: any[];
+}
+
+/**
+ * Transform frontend Assessment format to backend API format
+ */
+function transformToBackendFormat(payload: AssessmentCreatePayload): BackendAssessmentCreate {
+  return {
+    title: payload.title,
+    description: payload.description || null,
+    sections: payload.sections,
+  };
+}
+
+/**
+ * Transform backend API response to frontend Assessment format
+ */
+function transformToFrontendFormat(backendAssessment: BackendAssessmentResponse): Assessment {
+  return {
+    id: backendAssessment.id,
+    title: backendAssessment.title,
+    description: backendAssessment.description,
+    duration: backendAssessment.total_duration,
+    totalPoints: backendAssessment.total_points,
+    status: backendAssessment.status,
+    createdAt: backendAssessment.created_at,
+  };
+}
+
+/**
+ * Assessment Service - Backend API Integration
+ */
+class AssessmentAPIService {
+  private readonly baseUrl = '/api/assessments';
+
+  /**
+   * Get all assessments from the backend
+   */
+  async getAllAssessments(): Promise<Assessment[]> {
+    try {
+      const response = await apiClient.get<BackendAssessmentResponse[]>(this.baseUrl);
+      return response.data.map(transformToFrontendFormat);
+    } catch (error) {
+      console.error('Error fetching assessments:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get a single assessment by ID
+   */
+  async getAssessmentById(id: string): Promise<Assessment | undefined> {
+    try {
+      const response = await apiClient.get<BackendAssessmentResponse>(`${this.baseUrl}/${id}`);
+      return transformToFrontendFormat(response.data);
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return undefined;
+      }
+      console.error('Error fetching assessment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Create a new assessment
+   */
+  async createAssessment(payload: AssessmentCreatePayload): Promise<Assessment> {
+    try {
+      const backendFormat = transformToBackendFormat(payload);
+      const response = await apiClient.post<BackendAssessmentResponse>(this.baseUrl, backendFormat);
+      return transformToFrontendFormat(response.data);
+    } catch (error) {
+      console.error('Error creating assessment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete an assessment
+   */
+  async deleteAssessment(id: string): Promise<void> {
+    try {
+      await apiClient.delete(`${this.baseUrl}/${id}`);
+    } catch (error) {
+      console.error('Error deleting assessment:', error);
+      throw error;
+    }
+  }
+}
+
+// Export singleton instance
+export const assessmentService = new AssessmentAPIService();

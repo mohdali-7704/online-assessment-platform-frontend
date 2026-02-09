@@ -10,15 +10,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Edit, Trash2, Filter, Download, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Filter, Loader2 } from 'lucide-react';
 import { Question, QuestionType, QuestionDifficulty } from '@/lib/types/question';
 import { questionBankService, PREDEFINED_TOPICS, PREDEFINED_DOMAINS } from '@/lib/services/questionBankService';
-import { seedQuestionBank } from '@/lib/utils/seedQuestions';
 
 export default function QuestionBankPage() {
   const router = useRouter();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,9 +38,18 @@ export default function QuestionBankPage() {
     applyFilters();
   }, [questions, searchQuery, difficultyFilter, topicFilter, domainFilter, typeFilter]);
 
-  const loadQuestions = () => {
-    const allQuestions = questionBankService.getAllQuestions();
-    setQuestions(allQuestions);
+  const loadQuestions = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const allQuestions = await questionBankService.getAllQuestions();
+      setQuestions(allQuestions);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || err.message || 'Failed to load questions');
+      console.error('Error loading questions:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const applyFilters = () => {
@@ -82,10 +92,15 @@ export default function QuestionBankPage() {
     setFilteredQuestions(filtered);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this question?')) {
-      questionBankService.deleteQuestion(id);
-      loadQuestions();
+      try {
+        await questionBankService.deleteQuestion(id);
+        await loadQuestions();
+        alert('Question deleted successfully!');
+      } catch (err: any) {
+        alert(`Failed to delete question: ${err.response?.data?.detail || err.message}`);
+      }
     }
   };
 
@@ -101,34 +116,7 @@ export default function QuestionBankPage() {
     setTypeFilter('all');
   };
 
-  const handleSeedQuestions = () => {
-    if (questions.length > 0) {
-      const confirmed = confirm(
-        'The question bank already has questions. Do you want to seed sample questions anyway? This will add 40 more questions (10 of each type).'
-      );
-      if (!confirmed) return;
-    }
 
-    seedQuestionBank();
-    loadQuestions();
-    alert('Successfully seeded 40 sample questions to the question bank!');
-  };
-
-  const handleRemoveDuplicates = () => {
-    const confirmed = confirm(
-      'This will remove all duplicate questions (keeping only the first occurrence of each unique question ID). Continue?'
-    );
-    if (!confirmed) return;
-
-    const removedCount = questionBankService.removeDuplicates();
-    loadQuestions();
-
-    if (removedCount > 0) {
-      alert(`Successfully removed ${removedCount} duplicate question(s)!`);
-    } else {
-      alert('No duplicate questions found.');
-    }
-  };
 
   const getQuestionTypeLabel = (type: QuestionType) => {
     switch (type) {
@@ -180,22 +168,6 @@ export default function QuestionBankPage() {
               <p className="text-muted-foreground">Manage your question library</p>
             </div>
             <div className="flex gap-2">
-              <Button
-                onClick={handleRemoveDuplicates}
-                variant="outline"
-                className="gap-2"
-              >
-                <AlertTriangle className="w-4 h-4" />
-                Remove Duplicates
-              </Button>
-              <Button
-                onClick={() => router.push('/admin/question-bank/seed')}
-                variant="outline"
-                className="gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Load Sample Questions
-              </Button>
               <Button
                 onClick={() => router.push('/admin/question-bank/add')}
                 className="gap-2"
@@ -301,10 +273,10 @@ export default function QuestionBankPage() {
               {/* Clear Filters Button */}
               {(searchQuery || difficultyFilter !== 'all' || topicFilter !== 'all' ||
                 domainFilter !== 'all' || typeFilter !== 'all') && (
-                <Button variant="outline" onClick={clearFilters} size="sm">
-                  Clear Filters
-                </Button>
-              )}
+                  <Button variant="outline" onClick={clearFilters} size="sm">
+                    Clear Filters
+                  </Button>
+                )}
 
               {/* Results Count */}
               <div className="text-sm text-muted-foreground">
@@ -319,7 +291,11 @@ export default function QuestionBankPage() {
               <CardTitle>Questions</CardTitle>
             </CardHeader>
             <CardContent>
-              {filteredQuestions.length === 0 ? (
+              {loading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredQuestions.length === 0 ? (
                 <div className="text-center py-12">
                   {questions.length === 0 ? (
                     <div className="space-y-4">
@@ -331,14 +307,6 @@ export default function QuestionBankPage() {
                           Get started quickly with 40 sample questions or add your own
                         </p>
                         <div className="flex gap-2">
-                          <Button
-                            onClick={handleSeedQuestions}
-                            variant="outline"
-                            className="gap-2"
-                          >
-                            <Download className="w-4 h-4" />
-                            Load Sample Questions
-                          </Button>
                           <Button
                             onClick={() => router.push('/admin/question-bank/add')}
                             className="gap-2"

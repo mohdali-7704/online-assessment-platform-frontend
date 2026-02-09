@@ -10,15 +10,26 @@ export function useQuestionBank(questionType?: QuestionType) {
   const [difficultyFilter, setDifficultyFilter] = useState<string>('all');
   const [topicFilter, setTopicFilter] = useState<string>('all');
   const [domainFilter, setDomainFilter] = useState<string>('all');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const loadQuestions = (type?: QuestionType) => {
-    const allQuestions = questionBankService.getAllQuestions();
-    // Filter by type if provided
-    const filtered = type
-      ? allQuestions.filter(q => q.type === type)
-      : allQuestions;
-    setBankQuestions(filtered);
-    setFilteredBankQuestions(filtered);
+  const loadQuestions = async (type?: QuestionType) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const allQuestions = await questionBankService.getAllQuestions();
+      // Filter by type if provided
+      const filtered = type
+        ? allQuestions.filter(q => q.type === type)
+        : allQuestions;
+      setBankQuestions(filtered);
+      setFilteredBankQuestions(filtered);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || err.message || 'Failed to load questions');
+      console.error('Error loading questions:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const applyFilters = () => {
@@ -55,10 +66,9 @@ export function useQuestionBank(questionType?: QuestionType) {
   };
 
   const getSelectedQuestions = (): Question[] => {
-    return bankQuestions.filter(q => selectedQuestionIds.has(q.id)).map(q => ({
-      ...q,
-      id: `q${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    }));
+    // Return questions with their original IDs from the database
+    // These questions already exist in the backend, so we use their real UUIDs
+    return bankQuestions.filter(q => selectedQuestionIds.has(q.id));
   };
 
   const resetFilters = () => {
@@ -89,6 +99,8 @@ export function useQuestionBank(questionType?: QuestionType) {
     loadQuestions,
     toggleQuestionSelection,
     getSelectedQuestions,
-    resetFilters
+    resetFilters,
+    loading,
+    error
   };
 }
