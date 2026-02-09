@@ -26,7 +26,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/admin/assessments', label: 'Assessments', icon: FileText },
     { href: '/admin/question-bank', label: 'Question Bank', icon: Database },
-    { href: '/admin/users', label: 'Candidates', icon: Users },
+    { href: '/admin/candidates', label: 'Candidates', icon: Users },
     { href: '/admin/settings', label: 'Settings', icon: Settings },
   ];
 

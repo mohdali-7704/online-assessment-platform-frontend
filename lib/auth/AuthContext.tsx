@@ -1,9 +1,9 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { userService } from '@/lib/services/userService';
+import { candidateService } from '@/lib/services/candidateService';
 
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'candidate';
 
 export interface User {
   id: string;
@@ -35,26 +35,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = (username: string, password: string): boolean => {
-    const foundUser = userService.getUserByUsername(username);
+    const foundCandidate = candidateService.getCandidateByUsername(username);
 
-    if (foundUser && foundUser.password === password) {
-      // Check if user is active
-      if (foundUser.status !== 'active') {
-        return false; // Inactive or suspended users cannot log in
+    if (foundCandidate && foundCandidate.password === password) {
+      // Check if candidate is active
+      if (foundCandidate.status !== 'active') {
+        return false; // Inactive or suspended candidates cannot log in
       }
 
       const user: User = {
-        id: foundUser.id,
-        username: foundUser.username,
-        name: `${foundUser.firstName} ${foundUser.lastName}`,
-        email: foundUser.email,
-        role: foundUser.role
+        id: foundCandidate.id,
+        username: foundCandidate.username,
+        name: `${foundCandidate.firstName} ${foundCandidate.lastName}`,
+        email: foundCandidate.email,
+        role: foundCandidate.role
       };
       setUser(user);
       localStorage.setItem('user', JSON.stringify(user));
 
       // Update last login timestamp
-      userService.updateLastLogin(foundUser.id);
+      candidateService.updateLastLogin(foundCandidate.id);
 
       return true;
     }

@@ -5,14 +5,14 @@ import AdminRoute from '@/components/auth/AdminRoute';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { FileText, Users, CheckCircle, Clock } from 'lucide-react';
-import { userService } from '@/lib/services/userService';
+import { candidateService } from '@/lib/services/candidateService';
 
 export default function AdminDashboard() {
-  const [userStats, setUserStats] = useState({ totalUsers: 0, activeUsers: 0 });
+  const [candidateStats, setCandidateStats] = useState({ totalCandidates: 0, activeCandidates: 0 });
 
   useEffect(() => {
-    const stats = userService.getStats();
-    setUserStats(stats);
+    const stats = candidateService.getStats();
+    setCandidateStats(stats);
   }, []);
 
   return (
@@ -43,7 +43,7 @@ export default function AdminDashboard() {
                 <Users className="w-4 h-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{userStats.totalUsers}</div>
+                <div className="text-2xl font-bold">{candidateStats.totalCandidates}</div>
                 <p className="text-xs text-muted-foreground">Registered candidates</p>
               </CardContent>
             </Card>
