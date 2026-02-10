@@ -328,11 +328,6 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
       answer_data: ua.answer
     }));
 
-    setAllSectionAnswers(prev => [...prev, {
-      section_id: currentSection.section_id,
-      answers: sectionAnswers
-    }]);
-
     try {
       // Load next section
       const nextSectionOrder = currentSection.section_order + 1;
@@ -341,6 +336,12 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
         nextSectionOrder
       );
 
+      // Only add to allSectionAnswers if successfully loaded next section
+      setAllSectionAnswers(prev => [...prev, {
+        section_id: currentSection.section_id,
+        answers: sectionAnswers
+      }]);
+
       setCurrentSection(nextSectionData);
       setCurrentSectionIndex(prev => prev + 1);
       setCurrentQuestionIndex(0);
@@ -348,6 +349,7 @@ export default function AssessmentPage({ params }: { params: Promise<{ id: strin
       setShowSectionCompleteDialog(false);
     } catch (error: any) {
       // No more sections, this was the last one
+      // Don't add to allSectionAnswers here - will be added in handleSubmit
       console.log('No more sections, submitting assessment');
       setShowSectionCompleteDialog(false);
       setShowSubmitDialog(true);
