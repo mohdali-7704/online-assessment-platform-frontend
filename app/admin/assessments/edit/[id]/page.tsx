@@ -7,8 +7,9 @@ import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Save } from 'lucide-react';
 import { QuestionType } from '@/lib/types/question';
-import type { Assessment } from '@/lib/types/assessment';
-import { getAssessmentById } from '@/data/mock-assessments';
+import { assessmentService } from '@/lib/services/assessmentService';
+import type { AssessmentCreatePayload } from '@/lib/services/assessmentService';
+import { questionBankService } from '@/lib/services/questionBankService';
 
 // Import reusable components
 import {
@@ -39,90 +40,72 @@ export default function EditAssessmentPage() {
   const questionForms = useQuestionForms();
   const questionBank = useQuestionBank();
 
-  // Helper to get question type label
-  const getQuestionTypeLabel = (type: QuestionType) => {
-    switch (type) {
-      case QuestionType.MCQ: return 'MCQ';
-      case QuestionType.TRUE_FALSE: return 'True/False';
-      case QuestionType.DESCRIPTIVE: return 'Descriptive';
-      case QuestionType.CODING: return 'Coding';
-      default: return type;
-    }
-  };
-
   // Load assessment
   useEffect(() => {
     if (!assessmentId) return;
 
-    const loadedAssessment = getAssessmentById(assessmentId);
+    const loadAssessment = async () => {
+      try {
+        const loadedAssessment = await assessmentService.getAssessmentFull(assessmentId);
 
-    if (!loadedAssessment) {
-      alert('Assessment not found');
-      router.push('/admin/assessments');
-      return;
-    }
-
-    // Check if this is a custom assessment
-    const customAssessments = JSON.parse(localStorage.getItem('custom_assessments') || '[]');
-    const isCustomAssessment = customAssessments.some((a: Assessment) => a.id === assessmentId);
-
-    if (!isCustomAssessment) {
-      alert('Only custom assessments can be edited.');
-      router.push('/admin/assessments');
-      return;
-    }
-
-    setTitle(loadedAssessment.title);
-    setDescription(loadedAssessment.description);
-
-    // Convert to sections if not already
-    if (loadedAssessment.sections && loadedAssessment.sections.length > 0) {
-      sectionManager.setSections(loadedAssessment.sections);
-      sectionManager.setCurrentSectionId(loadedAssessment.sections[0].id);
-    } else {
-      // Legacy format - convert questions to sections by type
-      const sectionsByType = new Map<QuestionType, typeof loadedAssessment.questions>();
-
-      loadedAssessment.questions.forEach(q => {
-        if (!sectionsByType.has(q.type)) {
-          sectionsByType.set(q.type, []);
+        if (!loadedAssessment) {
+          alert('Assessment not found');
+          router.push('/admin/assessments');
+          return;
         }
-        sectionsByType.get(q.type)!.push(q);
-      });
 
-      const convertedSections = Array.from(sectionsByType.entries()).map(([type, questions], idx) => ({
-        id: `s${idx + 1}`,
-        name: `${getQuestionTypeLabel(type)} Section`,
-        questionType: type,
-        duration: Math.ceil(loadedAssessment.duration / sectionsByType.size),
-        questions
-      }));
+        setTitle(loadedAssessment.title);
+        setDescription(loadedAssessment.description || '');
 
-      if (convertedSections.length === 0) {
-        convertedSections.push({
-          id: 's1',
-          name: 'Section 1',
-          questionType: QuestionType.MCQ,
-          duration: 15,
-          questions: []
-        });
+        // Load sections
+        if (loadedAssessment.sections && loadedAssessment.sections.length > 0) {
+          sectionManager.setSections(loadedAssessment.sections);
+          sectionManager.setCurrentSectionId(loadedAssessment.sections[0].id);
+        } else {
+          // No sections - create default
+          sectionManager.setSections([{
+            id: 's1',
+            name: 'Section 1',
+            questionType: QuestionType.MCQ,
+            duration: 15,
+            questions: []
+          }]);
+          sectionManager.setCurrentSectionId('s1');
+        }
+
+        setLoading(false);
+      } catch (error: any) {
+        console.error('Error loading assessment:', error);
+        alert(`Failed to load assessment: ${error.response?.data?.detail || error.message}`);
+        router.push('/admin/assessments');
       }
+    };
 
-      sectionManager.setSections(convertedSections);
-      sectionManager.setCurrentSectionId(convertedSections[0].id);
-    }
-
-    setLoading(false);
+    loadAssessment();
   }, [assessmentId, router]);
 
-  const handleAddQuestion = () => {
+  const handleAddQuestion = async () => {
     if (!sectionManager.currentSection) return;
 
     const question = questionForms.buildQuestion(sectionManager.currentSection.questionType);
-    if (question) {
-      sectionManager.addQuestionToSection(question);
+    if (!question) return;
+
+    try {
+      console.log('[EditAssessment] Question built with temp ID:', question.id);
+
+      // Save question to backend first
+      const savedQuestion = await questionBankService.createQuestion(question);
+
+      console.log('[EditAssessment] Question saved with backend ID:', savedQuestion.id);
+      console.log('[EditAssessment] Saved question data:', savedQuestion);
+
+      // Add the saved question (with real ID) to the section
+      sectionManager.addQuestionToSection(savedQuestion);
       questionForms.resetForm();
       setShowQuestionForm(false);
+    } catch (error: any) {
+      console.error('Error saving question:', error);
+      alert(`Failed to save question: ${error.response?.data?.detail || error.message}`);
     }
   };
 
@@ -143,7 +126,7 @@ export default function EditAssessmentPage() {
     }
   };
 
-  const saveAssessment = () => {
+  const saveAssessment = async () => {
     if (!title.trim()) {
       alert('Please enter an assessment title.');
       return;
@@ -159,31 +142,27 @@ export default function EditAssessmentPage() {
       return;
     }
 
-    const totalDuration = sectionManager.getTotalDuration();
-    const totalPoints = sectionManager.getTotalPoints();
-    const allQuestions = sectionManager.sections.flatMap(s => s.questions);
+    try {
+      const payload: AssessmentCreatePayload = {
+        title,
+        description,
+        sections: sectionManager.sections.map(section => ({
+          name: section.name,
+          duration: section.duration,
+          questionType: section.questionType,
+          questions: section.questions.map(q => q.id) // Send question IDs
+        }))
+      };
 
-    const updatedAssessment: Assessment = {
-      id: assessmentId,
-      title,
-      description,
-      duration: totalDuration,
-      totalPoints,
-      sections: sectionManager.sections,
-      questions: allQuestions,
-      createdAt: new Date().toISOString()
-    };
+      console.log('[EditAssessment] Updating assessment with payload:', payload);
+      console.log('[EditAssessment] Section question IDs:', payload.sections.map(s => ({ section: s.name, questionIds: s.questions })));
 
-    const customAssessments = JSON.parse(localStorage.getItem('custom_assessments') || '[]');
-    const index = customAssessments.findIndex((a: Assessment) => a.id === assessmentId);
-
-    if (index !== -1) {
-      customAssessments[index] = updatedAssessment;
-      localStorage.setItem('custom_assessments', JSON.stringify(customAssessments));
+      await assessmentService.updateAssessment(assessmentId, payload);
       alert('Assessment updated successfully!');
       router.push('/admin/assessments');
-    } else {
-      alert('Error updating assessment');
+    } catch (error: any) {
+      console.error('Error updating assessment:', error);
+      alert(`Failed to update assessment: ${error.response?.data?.detail || error.message}`);
     }
   };
 

@@ -76,39 +76,45 @@ class AssessmentAPIService {
     }
   }
 
+  async getAssessmentFull(id: string): Promise<any> {
+    try {
+      const response = await apiClient.get(`${this.baseUrl}/${id}/full`);
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return undefined;
+      }
+      console.error('Error fetching full assessment:', error);
+      throw error;
+    }
+  }
+
   async createAssessment(payload: AssessmentCreatePayload): Promise<Assessment> {
     try {
       const response = await apiClient.post<BackendAssessmentResponse>(this.baseUrl, {
         title: payload.title,
         description: payload.description || null,
-        sections: []
+        sections: payload.sections
       });
 
-      const assessment = response.data;
-
-      for (let i = 0; i < payload.sections.length; i++) {
-        const sectionData = payload.sections[i];
-
-        const section = await sectionsService.createSection(assessment.id, {
-          section_order: i,
-          section_name: sectionData.name,
-          question_type: sectionData.questionType,
-          duration: sectionData.duration
-        });
-
-        if (sectionData.questions.length > 0) {
-          const assignments = sectionData.questions.map((questionId, index) => ({
-            question_id: questionId,
-            question_order: index
-          }));
-
-          await sectionsService.assignQuestionsToSection(section.id, assignments);
-        }
-      }
-
-      return transformToFrontendFormat(assessment);
+      return transformToFrontendFormat(response.data);
     } catch (error) {
       console.error('Error creating assessment:', error);
+      throw error;
+    }
+  }
+
+  async updateAssessment(id: string, payload: AssessmentCreatePayload): Promise<Assessment> {
+    try {
+      const response = await apiClient.put<BackendAssessmentResponse>(`${this.baseUrl}/${id}`, {
+        title: payload.title,
+        description: payload.description || null,
+        sections: payload.sections
+      });
+
+      return transformToFrontendFormat(response.data);
+    } catch (error) {
+      console.error('Error updating assessment:', error);
       throw error;
     }
   }
