@@ -56,12 +56,28 @@ export interface DescriptiveQuestion extends BaseQuestion {
   maxLength?: number; // Optional character limit
 }
 
+// Data Structure Types for LeetCode-style questions
+export type DataStructureType =
+  | 'array'
+  | 'linkedlist'
+  | 'tree'
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'linkedlist-pair'  // For questions with 2 linked lists
+  | 'matrix'           // 2D arrays
+  | 'graph';           // Graph data structure
+
 // Coding Question
 export interface TestCase {
   id: string;
   input: string;
   expectedOutput: string;
   isHidden: boolean; // Some test cases might be hidden from students
+
+  // NEW: Add type metadata for LeetCode-style data structures
+  inputType?: DataStructureType;
+  outputType?: DataStructureType;
 }
 
 export interface CodingQuestion extends BaseQuestion {
@@ -70,6 +86,7 @@ export interface CodingQuestion extends BaseQuestion {
   starterCode: { [language: string]: string }; // Default code for each language
   testCases: TestCase[];
   allowedLanguages: string[]; // e.g., ['javascript', 'python', 'cpp', 'java']
+  functionName?: string; // Name of the function students should implement
 }
 
 // Union type for all question types

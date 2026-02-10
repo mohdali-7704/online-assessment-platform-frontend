@@ -1,6 +1,8 @@
 import { judge0Client } from './axios-client';
 import { getLanguageId } from '../utils/helpers';
 import { CodeExecutionResult } from '../types/assessment';
+import { DATA_STRUCTURE_TEMPLATES } from '../templates/dataStructures';
+import { DataStructureType } from '../types/question';
 
 interface SubmissionPayload {
   source_code: string;
@@ -11,6 +13,11 @@ interface SubmissionPayload {
 
 interface SubmissionResponse {
   token: string;
+}
+
+interface WrapperConfig {
+  inputType?: DataStructureType;
+  outputType?: DataStructureType;
 }
 
 /**
@@ -100,15 +107,256 @@ export async function submitAndGetResult(
 }
 
 /**
- * Wrap user code with stdin reading and function calling logic
+ * Generate input conversion logic based on data structure type
  */
-function wrapCodeWithStdin(code: string, language: string, functionName: string): string {
+function generateInputConversion(
+  inputType: DataStructureType | undefined,
+  language: string
+): string {
+  if (!inputType || inputType === 'array' || inputType === 'string' || inputType === 'number' || inputType === 'boolean') {
+    // No conversion needed for primitive types
+    if (language === 'javascript') {
+      return 'const processedInput = rawInput;';
+    } else if (language === 'python') {
+      return 'processed_input = raw_input';
+    }
+  }
+
+  if (language === 'javascript') {
+    switch (inputType) {
+      case 'linkedlist':
+        return 'const processedInput = deserializeLinkedList(rawInput);';
+
+      case 'linkedlist-pair':
+        return `const [list1Arr, list2Arr] = rawInput;
+const list1 = deserializeLinkedList(list1Arr);
+const list2 = deserializeLinkedList(list2Arr);
+const processedInput = [list1, list2];`;
+
+      case 'tree':
+        return 'const processedInput = deserializeTree(rawInput);';
+
+      default:
+        return 'const processedInput = rawInput;';
+    }
+  } else if (language === 'python') {
+    switch (inputType) {
+      case 'linkedlist':
+        return 'processed_input = deserialize_linked_list(raw_input)';
+
+      case 'linkedlist-pair':
+        return `list1_arr, list2_arr = raw_input
+list1 = deserialize_linked_list(list1_arr)
+list2 = deserialize_linked_list(list2_arr)
+processed_input = [list1, list2]`;
+
+      case 'tree':
+        return 'processed_input = deserialize_tree(raw_input)';
+
+      default:
+        return 'processed_input = raw_input';
+    }
+  }
+
+  return 'const processedInput = rawInput;';
+}
+
+/**
+ * Generate output conversion logic based on data structure type
+ */
+function generateOutputConversion(
+  outputType: DataStructureType | undefined,
+  language: string
+): string {
+  if (!outputType || outputType === 'array' || outputType === 'string' || outputType === 'number' || outputType === 'boolean') {
+    // No conversion needed for primitive types
+    if (language === 'javascript') {
+      return 'const finalOutput = result;';
+    } else if (language === 'python') {
+      return 'final_output = result';
+    }
+  }
+
+  if (language === 'javascript') {
+    switch (outputType) {
+      case 'linkedlist':
+        return 'const finalOutput = serializeLinkedList(result);';
+
+      case 'tree':
+        return 'const finalOutput = serializeTree(result);';
+
+      default:
+        return 'const finalOutput = result;';
+    }
+  } else if (language === 'python') {
+    switch (outputType) {
+      case 'linkedlist':
+        return 'final_output = serialize_linked_list(result)';
+
+      case 'tree':
+        return 'final_output = serialize_tree(result)';
+
+      default:
+        return 'final_output = result';
+    }
+  }
+
+  return 'const finalOutput = result;';
+}
+
+/**
+ * Wrap JavaScript code with data structure handling
+ */
+function wrapJavaScript(
+  code: string,
+  functionName: string,
+  config: WrapperConfig
+): string {
+  const templates = DATA_STRUCTURE_TEMPLATES.javascript;
+
+  // Determine which data structures to inject
+  let dataStructureCode = '';
+  const typesNeeded = new Set([config.inputType, config.outputType]);
+
+  if (typesNeeded.has('linkedlist') || typesNeeded.has('linkedlist-pair')) {
+    dataStructureCode += templates.ListNode + '\n';
+  }
+  if (typesNeeded.has('tree')) {
+    dataStructureCode += templates.TreeNode + '\n';
+  }
+
+  // Generate input conversion
+  const inputConversion = generateInputConversion(config.inputType, 'javascript');
+
+  // Generate output conversion
+  const outputConversion = generateOutputConversion(config.outputType, 'javascript');
+
+  return `// ==========================================
+// Auto-generated wrapper - DO NOT MODIFY
+// ==========================================
+
+${dataStructureCode}
+
+// Read input from stdin
+const fs = require('fs');
+const input = fs.readFileSync(0, 'utf-8').trim();
+const rawInput = JSON.parse(input);
+
+// Convert input to appropriate data structure
+${inputConversion}
+
+// ==========================================
+// Student's code below
+// ==========================================
+
+${code}
+
+// ==========================================
+// Execute and output
+// ==========================================
+
+// Call student's function
+const result = ${functionName}(processedInput);
+
+// Convert output back to serializable format
+${outputConversion}
+
+// Output result as JSON
+console.log(JSON.stringify(finalOutput));
+`;
+}
+
+/**
+ * Wrap Python code with data structure handling
+ */
+function wrapPython(
+  code: string,
+  functionName: string,
+  config: WrapperConfig
+): string {
+  const templates = DATA_STRUCTURE_TEMPLATES.python;
+
+  let dataStructureCode = '';
+  const typesNeeded = new Set([config.inputType, config.outputType]);
+
+  if (typesNeeded.has('linkedlist') || typesNeeded.has('linkedlist-pair')) {
+    dataStructureCode += templates.ListNode + '\n';
+  }
+  if (typesNeeded.has('tree')) {
+    dataStructureCode += templates.TreeNode + '\n';
+  }
+
+  const inputConversion = generateInputConversion(config.inputType, 'python');
+  const outputConversion = generateOutputConversion(config.outputType, 'python');
+
+  return `# ==========================================
+# Auto-generated wrapper - DO NOT MODIFY
+# ==========================================
+
+import sys
+import json
+
+${dataStructureCode}
+
+# Read input from stdin
+input_data = sys.stdin.read().strip()
+raw_input = json.loads(input_data)
+
+# Convert input to appropriate data structure
+${inputConversion}
+
+# ==========================================
+# Student's code below
+# ==========================================
+
+${code}
+
+# ==========================================
+# Execute and output
+# ==========================================
+
+# Call student's function
+result = ${functionName}(processed_input)
+
+# Convert output back to serializable format
+${outputConversion}
+
+# Output result as JSON
+print(json.dumps(final_output))
+`;
+}
+
+/**
+ * Wrap user code with stdin reading and function calling logic
+ * Supports LeetCode-style data structures (linked lists, trees, etc.)
+ */
+function wrapCodeWithStdin(
+  code: string,
+  language: string,
+  functionName: string,
+  config: WrapperConfig = {}
+): string {
   // Extract function name from code if not provided
   if (!functionName) {
     const match = code.match(/function\s+(\w+)\s*\(|def\s+(\w+)\s*\(|int\s+(\w+)\s*\(|public\s+static\s+\w+\s+(\w+)\s*\(/);
     functionName = match ? (match[1] || match[2] || match[3] || match[4]) : 'solution';
   }
 
+  // Use smart wrapper if data structure types are specified
+  if (config.inputType || config.outputType) {
+    switch (language.toLowerCase()) {
+      case 'javascript':
+        return wrapJavaScript(code, functionName, config);
+      case 'python':
+        return wrapPython(code, functionName, config);
+      // Add C++ and Java support later if needed
+      default:
+        // Fallback to simple wrapper
+        break;
+    }
+  }
+
+  // Fallback to simple wrapper for basic types
   switch (language.toLowerCase()) {
     case 'javascript':
       return `${code}
@@ -117,7 +365,7 @@ function wrapCodeWithStdin(code: string, language: string, functionName: string)
 const input = require('fs').readFileSync(0, 'utf-8').trim();
 const arr = JSON.parse(input);
 const result = ${functionName}(arr);
-console.log(result);`;
+console.log(JSON.stringify(result));`;
 
     case 'python':
       return `${code}
@@ -128,7 +376,7 @@ import json
 input_data = sys.stdin.read().strip()
 arr = json.loads(input_data)
 result = ${functionName}(arr)
-print(result)`;
+print(json.dumps(result))`;
 
     case 'cpp':
       // For C++, we can't easily parse JSON, so we'll expect space-separated numbers
@@ -188,12 +436,17 @@ public class Main {
 }
 
 /**
- * Run code against test cases
+ * Run code against test cases with LeetCode-style data structure support
  */
 export async function runTestCases(
   code: string,
   language: string,
-  testCases: Array<{ input: string; expectedOutput: string }>,
+  testCases: Array<{
+    input: string;
+    expectedOutput: string;
+    inputType?: DataStructureType;
+    outputType?: DataStructureType;
+  }>,
   functionName?: string
 ): Promise<Array<{
   passed: boolean;
@@ -204,11 +457,17 @@ export async function runTestCases(
 }>> {
   const results = [];
 
-  // Wrap the code to read from stdin and call the function
-  const wrappedCode = wrapCodeWithStdin(code, language, functionName || '');
-
   for (const testCase of testCases) {
     try {
+      // Extract type configuration from test case
+      const config: WrapperConfig = {
+        inputType: testCase.inputType,
+        outputType: testCase.outputType
+      };
+
+      // Wrap the code to read from stdin and call the function
+      const wrappedCode = wrapCodeWithStdin(code, language, functionName || '', config);
+
       const result = await submitAndGetResult(wrappedCode, language, testCase.input);
 
       const actualOutput = (result.stdout || '').trim();
