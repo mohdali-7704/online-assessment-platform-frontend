@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import AdminRoute from '@/components/auth/AdminRoute';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { ArrowLeft, Save } from 'lucide-react';
 import { QuestionType } from '@/lib/types/question';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -28,6 +30,7 @@ export default function CreateAssessmentPage() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [status, setStatus] = useState('published'); // Default to published
   const [showQuestionForm, setShowQuestionForm] = useState(false);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
 
@@ -105,6 +108,7 @@ export default function CreateAssessmentPage() {
       const payload: AssessmentCreatePayload = {
         title,
         description,
+        status,
         sections: sectionManager.sections.map(section => ({
           name: section.name,
           duration: section.duration,
@@ -117,7 +121,7 @@ export default function CreateAssessmentPage() {
       console.log('[CreateAssessment] Section question IDs:', payload.sections.map(s => ({ section: s.name, questionIds: s.questions })));
 
       const created = await assessmentService.createAssessment(payload);
-      alert(`Assessment created successfully! ID: ${created.id}`);
+      alert(`Assessment created successfully! Status: ${status}`);
       router.push('/admin/assessments');
     } catch (error: any) {
       console.error('Error creating assessment:', error);
@@ -152,6 +156,28 @@ export default function CreateAssessmentPage() {
             onTitleChange={setTitle}
             onDescriptionChange={setDescription}
           />
+
+          {/* Status Toggle */}
+          <div className="bg-white rounded-lg border p-6">
+            <h3 className="text-lg font-semibold mb-4">Assessment Status</h3>
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="status-switch" className="text-base">
+                  {status === 'published' ? 'Published' : 'Draft'}
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  {status === 'published'
+                    ? 'Assessment will be available to candidates immediately'
+                    : 'Assessment will be saved as draft (not visible to candidates)'}
+                </p>
+              </div>
+              <Switch
+                id="status-switch"
+                checked={status === 'published'}
+                onCheckedChange={(checked: boolean) => setStatus(checked ? 'published' : 'draft')}
+              />
+            </div>
+          </div>
 
           {/* Section Manager */}
           <SectionManager

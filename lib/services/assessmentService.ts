@@ -1,5 +1,4 @@
 import apiClient from '@/app/api';
-import { sectionsService } from './sectionsService';
 
 // Backend API response types (snake_case from backend)
 interface BackendAssessmentResponse {
@@ -36,6 +35,7 @@ export interface AssessmentCreatePayload {
   title: string;
   description?: string | null;
   sections: SectionData[];
+  status?: string;
 }
 
 function transformToFrontendFormat(backendAssessment: BackendAssessmentResponse): Assessment {
@@ -94,7 +94,8 @@ class AssessmentAPIService {
       const response = await apiClient.post<BackendAssessmentResponse>(this.baseUrl, {
         title: payload.title,
         description: payload.description || null,
-        sections: payload.sections
+        sections: payload.sections,
+        status: payload.status || "published"
       });
 
       return transformToFrontendFormat(response.data);
@@ -109,7 +110,8 @@ class AssessmentAPIService {
       const response = await apiClient.put<BackendAssessmentResponse>(`${this.baseUrl}/${id}`, {
         title: payload.title,
         description: payload.description || null,
-        sections: payload.sections
+        sections: payload.sections,
+        status: payload.status || "published"
       });
 
       return transformToFrontendFormat(response.data);
