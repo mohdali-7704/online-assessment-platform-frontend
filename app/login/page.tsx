@@ -17,7 +17,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -26,7 +26,7 @@ export default function LoginPage() {
       return;
     }
 
-    const success = login(username, password);
+    const success = await login(username, password);
 
     if (success) {
       // Check user role after login
@@ -46,11 +46,11 @@ export default function LoginPage() {
     }
   };
 
-  const handleDemoLogin = (demoUsername: string, demoPassword: string) => {
+  const handleDemoLogin = async (demoUsername: string, demoPassword: string) => {
     setUsername(demoUsername);
     setPassword(demoPassword);
 
-    const success = login(demoUsername, demoPassword);
+    const success = await login(demoUsername, demoPassword);
     if (success) {
       // Check user role after login
       const storedUser = localStorage.getItem('user');

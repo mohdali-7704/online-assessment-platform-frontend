@@ -1,230 +1,364 @@
+import { backendClient } from '@/lib/api/backend-client';
 import { Candidate, CreateCandidateInput, UpdateCandidateInput, CandidateStats, CandidateCredentials } from '@/lib/types/candidate';
 
-const CANDIDATES_STORAGE_KEY = 'candidates';
-
-// Initial mock candidates for seeding
-const INITIAL_CANDIDATES: Candidate[] = [
-  {
-    id: '1',
-    username: 'john',
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john@example.com',
-    password: 'john123',
-    role: 'candidate',
-    status: 'active',
-    createdAt: new Date('2024-01-15').toISOString(),
-    lastLogin: new Date('2025-02-05').toISOString(),
-    department: 'Engineering',
-    phone: '+1234567890'
-  },
-  {
-    id: '2',
-    username: 'jane',
-    firstName: 'Jane',
-    lastName: 'Smith',
-    email: 'jane@example.com',
-    password: 'jane123',
-    role: 'candidate',
-    status: 'active',
-    createdAt: new Date('2024-02-20').toISOString(),
-    lastLogin: new Date('2025-02-04').toISOString(),
-    department: 'Marketing',
-    phone: '+1234567891'
-  },
-  {
-    id: '3',
-    username: 'admin',
-    firstName: 'Admin',
-    lastName: 'User',
-    email: 'admin@example.com',
-    password: 'admin123',
-    role: 'admin',
-    status: 'active',
-    createdAt: new Date('2024-01-01').toISOString(),
-    lastLogin: new Date('2025-02-06').toISOString(),
-    department: 'Administration'
-  }
-];
-
 class CandidateService {
-  private getCandidates(): Candidate[] {
-    if (typeof window === 'undefined') return [];
+  private readonly baseUrl = '/candidates';
 
-    const stored = localStorage.getItem(CANDIDATES_STORAGE_KEY);
-    if (!stored) {
-      // Initialize with default candidates
-      this.saveCandidates(INITIAL_CANDIDATES);
-      return INITIAL_CANDIDATES;
+  // ============= CRUD Operations =============
+
+  /**
+   * Get all candidates with optional filters
+   */
+  async getAllCandidates(filters?: {
+    role?: string;
+    status?: string;
+    search?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<Omit<Candidate, 'password'>[]> {
+    try {
+      const params = new URLSearchParams();
+      if (filters?.role) params.append('role', filters.role);
+      if (filters?.status) params.append('status', filters.status);
+      if (filters?.search) params.append('search', filters.search);
+      if (filters?.skip !== undefined) params.append('skip', filters.skip.toString());
+      if (filters?.limit !== undefined) params.append('limit', filters.limit.toString());
+
+      const response = await backendClient.get(`${this.baseUrl}?${params.toString()}`);
+
+      // Transform snake_case to camelCase
+      return response.data.map((candidate: any) => ({
+        id: candidate.id,
+        username: candidate.username,
+        firstName: candidate.first_name,
+        lastName: candidate.last_name,
+        email: candidate.email,
+        role: candidate.role,
+        status: candidate.status,
+        department: candidate.department,
+        phone: candidate.phone,
+        createdAt: candidate.created_at,
+        lastLogin: candidate.last_login
+      }));
+    } catch (error) {
+      console.error('Error fetching candidates:', error);
+      throw error;
     }
-    return JSON.parse(stored);
   }
 
-  private saveCandidates(candidates: Candidate[]): void {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(CANDIDATES_STORAGE_KEY, JSON.stringify(candidates));
-  }
+  /**
+   * Get candidate by ID
+   */
+  async getCandidateById(id: string): Promise<Omit<Candidate, 'password'> | null> {
+    try {
+      const response = await backendClient.get(`${this.baseUrl}/${id}`);
+      const candidate = response.data;
 
-  // Get all candidates (without passwords)
-  getAllCandidates(): Omit<Candidate, 'password'>[] {
-    return this.getCandidates().map(({ password, ...candidate }) => candidate);
-  }
-
-  // Get candidate by ID
-  getCandidateById(id: string): Omit<Candidate, 'password'> | null {
-    const candidate = this.getCandidates().find(c => c.id === id);
-    if (!candidate) return null;
-    const { password, ...candidateWithoutPassword } = candidate;
-    return candidateWithoutPassword;
-  }
-
-  // Get candidate by username (for authentication)
-  getCandidateByUsername(username: string): Candidate | null {
-    return this.getCandidates().find(c => c.username === username) || null;
-  }
-
-  // Create new candidate - returns both candidate and credentials
-  createCandidate(input: CreateCandidateInput): {
-    candidate: Omit<Candidate, 'password'>;
-    credentials: CandidateCredentials;
-  } {
-    const candidates = this.getCandidates();
-
-    // Check if username already exists
-    if (candidates.some(c => c.username === input.username)) {
-      throw new Error('Username already exists');
+      return {
+        id: candidate.id,
+        username: candidate.username,
+        firstName: candidate.first_name,
+        lastName: candidate.last_name,
+        email: candidate.email,
+        role: candidate.role,
+        status: candidate.status,
+        department: candidate.department,
+        phone: candidate.phone,
+        createdAt: candidate.created_at,
+        lastLogin: candidate.last_login
+      };
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      console.error('Error fetching candidate:', error);
+      throw error;
     }
-
-    // Check if email already exists
-    if (candidates.some(c => c.email === input.email)) {
-      throw new Error('Email already exists');
-    }
-
-    const newCandidate: Candidate = {
-      id: Date.now().toString(),
-      username: input.username,
-      firstName: input.firstName,
-      lastName: input.lastName,
-      email: input.email,
-      password: input.password,
-      role: input.role,
-      status: input.status || 'active',
-      createdAt: new Date().toISOString(),
-      department: input.department,
-      phone: input.phone
-    };
-
-    candidates.push(newCandidate);
-    this.saveCandidates(candidates);
-
-    const { password, ...candidateWithoutPassword } = newCandidate;
-
-    const credentials: CandidateCredentials = {
-      username: newCandidate.username,
-      password: input.password,
-      generatedAt: new Date().toISOString()
-    };
-
-    return { candidate: candidateWithoutPassword, credentials };
   }
 
-  // Update candidate
-  updateCandidate(id: string, input: UpdateCandidateInput): Omit<Candidate, 'password'> | null {
-    const candidates = this.getCandidates();
-    const index = candidates.findIndex(c => c.id === id);
-
-    if (index === -1) {
+  /**
+   * Get candidate by username (for authentication)
+   */
+  async getCandidateByUsername(username: string): Promise<Candidate | null> {
+    try {
+      const candidates = await this.getAllCandidates({ search: username });
+      return candidates.find(c => c.username === username) as Candidate || null;
+    } catch (error) {
+      console.error('Error fetching candidate by username:', error);
       return null;
     }
+  }
 
-    // Check if email is being changed and already exists
-    if (input.email && input.email !== candidates[index].email) {
-      if (candidates.some(c => c.email === input.email && c.id !== id)) {
-        throw new Error('Email already exists');
+  /**
+   * Create new candidate
+   */
+  async createCandidate(input: CreateCandidateInput): Promise<{
+    candidate: Omit<Candidate, 'password'>;
+    credentials: CandidateCredentials;
+  }> {
+    try {
+      // Transform camelCase to snake_case for backend
+      const payload = {
+        username: input.username,
+        first_name: input.firstName,
+        last_name: input.lastName,
+        email: input.email,
+        password: input.password,
+        role: input.role,
+        status: input.status || 'active',
+        department: input.department,
+        phone: input.phone
+      };
+
+      const response = await backendClient.post(this.baseUrl, payload);
+      const candidate = response.data;
+
+      const candidateWithoutPassword = {
+        id: candidate.id,
+        username: candidate.username,
+        firstName: candidate.first_name,
+        lastName: candidate.last_name,
+        email: candidate.email,
+        role: candidate.role,
+        status: candidate.status,
+        department: candidate.department,
+        phone: candidate.phone,
+        createdAt: candidate.created_at,
+        lastLogin: candidate.last_login
+      };
+
+      const credentials: CandidateCredentials = {
+        username: input.username,
+        password: input.password,
+        generatedAt: new Date().toISOString()
+      };
+
+      return { candidate: candidateWithoutPassword, credentials };
+    } catch (error: any) {
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
       }
+      console.error('Error creating candidate:', error);
+      throw error;
     }
-
-    const updatedCandidate: Candidate = {
-      ...candidates[index],
-      ...input,
-      id: candidates[index].id, // Preserve ID
-      username: candidates[index].username, // Preserve username
-      createdAt: candidates[index].createdAt // Preserve creation date
-    };
-
-    candidates[index] = updatedCandidate;
-    this.saveCandidates(candidates);
-
-    const { password, ...candidateWithoutPassword } = updatedCandidate;
-    return candidateWithoutPassword;
   }
 
-  // Delete candidate
-  deleteCandidate(id: string): boolean {
-    const candidates = this.getCandidates();
-    const filteredCandidates = candidates.filter(c => c.id !== id);
+  /**
+   * Bulk create candidates
+   */
+  async bulkCreateCandidates(candidates: CreateCandidateInput[]): Promise<{
+    successCount: number;
+    errorCount: number;
+    errors: string[];
+    createdCandidates: Omit<Candidate, 'password'>[];
+  }> {
+    try {
+      // Transform camelCase to snake_case
+      const payload = {
+        candidates: candidates.map(c => ({
+          username: c.username,
+          first_name: c.firstName,
+          last_name: c.lastName,
+          email: c.email,
+          password: c.password,
+          role: c.role,
+          status: c.status || 'active',
+          department: c.department,
+          phone: c.phone
+        }))
+      };
 
-    if (filteredCandidates.length === candidates.length) {
-      return false; // Candidate not found
+      const response = await backendClient.post(`${this.baseUrl}/bulk`, payload);
+      const result = response.data;
+
+      return {
+        successCount: result.success_count,
+        errorCount: result.error_count,
+        errors: result.errors,
+        createdCandidates: result.created_candidates.map((c: any) => ({
+          id: c.id,
+          username: c.username,
+          firstName: c.first_name,
+          lastName: c.last_name,
+          email: c.email,
+          role: c.role,
+          status: c.status,
+          department: c.department,
+          phone: c.phone,
+          createdAt: c.created_at,
+          lastLogin: c.last_login
+        }))
+      };
+    } catch (error) {
+      console.error('Error bulk creating candidates:', error);
+      throw error;
     }
-
-    this.saveCandidates(filteredCandidates);
-    return true;
   }
 
-  // Update candidate status
-  updateCandidateStatus(id: string, status: Candidate['status']): Omit<Candidate, 'password'> | null {
+  /**
+   * Import candidates from CSV file
+   */
+  async importFromCSV(file: File): Promise<{
+    successCount: number;
+    errorCount: number;
+    errors: string[];
+    createdCandidates: Omit<Candidate, 'password'>[];
+  }> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await backendClient.post(`${this.baseUrl}/import-csv`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      const result = response.data;
+
+      return {
+        successCount: result.success_count,
+        errorCount: result.error_count,
+        errors: result.errors,
+        createdCandidates: result.created_candidates.map((c: any) => ({
+          id: c.id,
+          username: c.username,
+          firstName: c.first_name,
+          lastName: c.last_name,
+          email: c.email,
+          role: c.role,
+          status: c.status,
+          department: c.department,
+          phone: c.phone,
+          createdAt: c.created_at,
+          lastLogin: c.last_login
+        }))
+      };
+    } catch (error) {
+      console.error('Error importing CSV:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update candidate
+   */
+  async updateCandidate(id: string, input: UpdateCandidateInput): Promise<Omit<Candidate, 'password'> | null> {
+    try {
+      // Transform camelCase to snake_case
+      const payload: any = {};
+      if (input.firstName !== undefined) payload.first_name = input.firstName;
+      if (input.lastName !== undefined) payload.last_name = input.lastName;
+      if (input.email !== undefined) payload.email = input.email;
+      if (input.password !== undefined) payload.password = input.password;
+      if (input.role !== undefined) payload.role = input.role;
+      if (input.status !== undefined) payload.status = input.status;
+      if (input.department !== undefined) payload.department = input.department;
+      if (input.phone !== undefined) payload.phone = input.phone;
+
+      const response = await backendClient.put(`${this.baseUrl}/${id}`, payload);
+      const candidate = response.data;
+
+      return {
+        id: candidate.id,
+        username: candidate.username,
+        firstName: candidate.first_name,
+        lastName: candidate.last_name,
+        email: candidate.email,
+        role: candidate.role,
+        status: candidate.status,
+        department: candidate.department,
+        phone: candidate.phone,
+        createdAt: candidate.created_at,
+        lastLogin: candidate.last_login
+      };
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return null;
+      }
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+      console.error('Error updating candidate:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete candidate
+   */
+  async deleteCandidate(id: string): Promise<boolean> {
+    try {
+      await backendClient.delete(`${this.baseUrl}/${id}`);
+      return true;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return false;
+      }
+      console.error('Error deleting candidate:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update candidate status
+   */
+  async updateCandidateStatus(id: string, status: Candidate['status']): Promise<Omit<Candidate, 'password'> | null> {
     return this.updateCandidate(id, { status });
   }
 
-  // Update candidate role
-  updateCandidateRole(id: string, role: Candidate['role']): Omit<Candidate, 'password'> | null {
+  /**
+   * Update candidate role
+   */
+  async updateCandidateRole(id: string, role: Candidate['role']): Promise<Omit<Candidate, 'password'> | null> {
     return this.updateCandidate(id, { role });
   }
 
-  // Update last login
-  updateLastLogin(id: string): void {
-    const candidates = this.getCandidates();
-    const index = candidates.findIndex(c => c.id === id);
+  /**
+   * Get candidate statistics
+   */
+  async getStats(): Promise<CandidateStats> {
+    try {
+      const candidates = await this.getAllCandidates();
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-    if (index !== -1) {
-      candidates[index].lastLogin = new Date().toISOString();
-      this.saveCandidates(candidates);
+      return {
+        totalCandidates: candidates.length,
+        activeCandidates: candidates.filter(c => c.status === 'active').length,
+        adminUsers: candidates.filter(c => c.role === 'admin').length,
+        newThisWeek: candidates.filter(c => new Date(c.createdAt) > oneWeekAgo).length
+      };
+    } catch (error) {
+      console.error('Error fetching candidate stats:', error);
+      throw error;
     }
   }
 
-  // Get candidate statistics
-  getStats(): CandidateStats {
-    const candidates = this.getCandidates();
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  /**
+   * Reset password and return new credentials
+   */
+  async resetPassword(id: string): Promise<CandidateCredentials | null> {
+    try {
+      const newPassword = this.generatePassword();
+      const candidate = await this.updateCandidate(id, { password: newPassword });
 
-    return {
-      totalCandidates: candidates.length,
-      activeCandidates: candidates.filter(c => c.status === 'active').length,
-      adminUsers: candidates.filter(c => c.role === 'admin').length,
-      newThisWeek: candidates.filter(c => new Date(c.createdAt) > oneWeekAgo).length
-    };
+      if (!candidate) return null;
+
+      return {
+        username: candidate.username,
+        password: newPassword,
+        generatedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      throw error;
+    }
   }
 
-  // Reset password and return new credentials
-  resetPassword(id: string): CandidateCredentials | null {
-    const candidates = this.getCandidates();
-    const candidate = candidates.find(c => c.id === id);
-
-    if (!candidate) return null;
-
-    const newPassword = this.generatePassword();
-    this.updateCandidate(id, { password: newPassword });
-
-    return {
-      username: candidate.username,
-      password: newPassword,
-      generatedAt: new Date().toISOString()
-    };
-  }
-
-  // Generate random password
+  /**
+   * Generate random password
+   */
   generatePassword(length: number = 12): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
     let password = '';
@@ -234,9 +368,60 @@ class CandidateService {
     return password;
   }
 
-  // Reset candidates to initial state (for testing)
-  resetToDefaults(): void {
-    this.saveCandidates(INITIAL_CANDIDATES);
+  // ============= Assessment-Candidate Relationships =============
+
+  /**
+   * Add candidates to an assessment
+   */
+  async addCandidatesToAssessment(
+    assessmentId: string,
+    candidateEmails?: string[],
+    candidateIds?: string[]
+  ): Promise<{ message: string; results: any[] }> {
+    try {
+      const payload: any = {};
+      if (candidateEmails) payload.candidate_emails = candidateEmails;
+      if (candidateIds) payload.candidate_ids = candidateIds;
+
+      const response = await backendClient.post(
+        `${this.baseUrl}/assessments/${assessmentId}/add`,
+        payload
+      );
+
+      return response.data;
+    } catch (error) {
+      console.error('Error adding candidates to assessment:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get candidates for an assessment
+   */
+  async getAssessmentCandidates(assessmentId: string): Promise<any[]> {
+    try {
+      const response = await backendClient.get(`${this.baseUrl}/assessments/${assessmentId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching assessment candidates:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Remove candidate from assessment
+   */
+  async removeCandidateFromAssessment(assessmentId: string, candidateId: string): Promise<boolean> {
+    try {
+      await backendClient.delete(`${this.baseUrl}/assessments/${assessmentId}/${candidateId}`);
+      return true;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        return false;
+      }
+      console.error('Error removing candidate from assessment:', error);
+      throw error;
+    }
   }
 }
 

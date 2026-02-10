@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { candidateService } from '@/lib/services/candidateService';
+import { backendClient } from '@/lib/api/backend-client';
 
 export type UserRole = 'admin' | 'candidate';
 
@@ -15,7 +15,7 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password: string) => boolean;
+  login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   isAdmin: boolean;
@@ -34,32 +34,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = (username: string, password: string): boolean => {
-    const foundCandidate = candidateService.getCandidateByUsername(username);
+  const login = async (username: string, password: string): Promise<boolean> => {
+    try {
+      const response = await backendClient.post('/auth/login', {
+        username,
+        password
+      });
 
-    if (foundCandidate && foundCandidate.password === password) {
-      // Check if candidate is active
-      if (foundCandidate.status !== 'active') {
-        return false; // Inactive or suspended candidates cannot log in
-      }
+      const candidateData = response.data;
 
+      // Transform to User format
       const user: User = {
-        id: foundCandidate.id,
-        username: foundCandidate.username,
-        name: `${foundCandidate.firstName} ${foundCandidate.lastName}`,
-        email: foundCandidate.email,
-        role: foundCandidate.role
+        id: candidateData.id,
+        username: candidateData.username,
+        name: `${candidateData.first_name} ${candidateData.last_name}`,
+        email: candidateData.email,
+        role: candidateData.role
       };
+
       setUser(user);
       localStorage.setItem('user', JSON.stringify(user));
 
-      // Update last login timestamp
-      candidateService.updateLastLogin(foundCandidate.id);
-
       return true;
+    } catch (error: any) {
+      console.error('Login failed:', error.response?.data?.detail || error.message);
+      return false;
     }
-
-    return false;
   };
 
   const logout = () => {

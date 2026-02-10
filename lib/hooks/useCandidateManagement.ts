@@ -17,13 +17,13 @@ export function useCandidateManagement() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load candidates
-  const loadCandidates = () => {
+  // Load candidates (now async)
+  const loadCandidates = async () => {
     setIsLoading(true);
     try {
-      const allCandidates = candidateService.getAllCandidates();
+      const allCandidates = await candidateService.getAllCandidates();
       setCandidates(allCandidates);
-      const candidateStats = candidateService.getStats();
+      const candidateStats = await candidateService.getStats();
       setStats(candidateStats);
     } catch (error) {
       console.error('Error loading candidates:', error);
@@ -80,29 +80,29 @@ export function useCandidateManagement() {
     });
   };
 
-  // Delete candidate
-  const deleteCandidate = (id: string): boolean => {
-    const success = candidateService.deleteCandidate(id);
+  // Delete candidate (now async)
+  const deleteCandidate = async (id: string): Promise<boolean> => {
+    const success = await candidateService.deleteCandidate(id);
     if (success) {
-      loadCandidates();
+      await loadCandidates();
     }
     return success;
   };
 
-  // Update candidate status
-  const updateCandidateStatus = (id: string, status: Candidate['status']) => {
-    const updated = candidateService.updateCandidateStatus(id, status);
+  // Update candidate status (now async)
+  const updateCandidateStatus = async (id: string, status: Candidate['status']) => {
+    const updated = await candidateService.updateCandidateStatus(id, status);
     if (updated) {
-      loadCandidates();
+      await loadCandidates();
     }
     return updated;
   };
 
-  // Update candidate role
-  const updateCandidateRole = (id: string, role: Candidate['role']) => {
-    const updated = candidateService.updateCandidateRole(id, role);
+  // Update candidate role (now async)
+  const updateCandidateRole = async (id: string, role: Candidate['role']) => {
+    const updated = await candidateService.updateCandidateRole(id, role);
     if (updated) {
-      loadCandidates();
+      await loadCandidates();
     }
     return updated;
   };

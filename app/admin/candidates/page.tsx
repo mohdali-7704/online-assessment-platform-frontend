@@ -145,8 +145,9 @@ export default function CandidatesPage() {
     }
   };
 
-  const handleResendCredentials = (candidateId: string) => {
-    const credentials = candidateService.resetPassword(candidateId);
+
+  const handleResendCredentials = async (candidateId: string) => {
+    const credentials = await candidateService.resetPassword(candidateId);
     if (credentials) {
       setCurrentCredentials(credentials);
       const candidate = candidates.find((c) => c.id === candidateId);
@@ -283,10 +284,10 @@ export default function CandidatesPage() {
               {(filters.search ||
                 filters.role !== "all" ||
                 filters.status !== "all") && (
-                <Button variant="outline" onClick={clearFilters} size="sm">
-                  Clear Filters
-                </Button>
-              )}
+                  <Button variant="outline" onClick={clearFilters} size="sm">
+                    Clear Filters
+                  </Button>
+                )}
 
               {/* Results Count */}
               <div className="text-sm text-muted-foreground">
@@ -334,97 +335,97 @@ export default function CandidatesPage() {
                       className="p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 space-y-2">
-                            {/* Candidate Name and Username */}
-                            <div>
-                              <div className="font-medium">
-                                {candidate.firstName} {candidate.lastName}
-                              </div>
-                              <div className="text-sm text-muted-foreground">
-                                @{candidate.username} • {candidate.email}
-                              </div>
+                        <div className="flex-1 space-y-2">
+                          {/* Candidate Name and Username */}
+                          <div>
+                            <div className="font-medium">
+                              {candidate.firstName} {candidate.lastName}
                             </div>
-
-                            {/* Metadata */}
-                            <div className="flex flex-wrap gap-2">
-                              <Badge className={getRoleColor(candidate.role)}>
-                                {candidate.role === "admin" ? "Admin" : "Candidate"}
-                              </Badge>
-                              <Badge className={getStatusColor(candidate.status)}>
-                                {candidate.status.charAt(0).toUpperCase() +
-                                  candidate.status.slice(1)}
-                              </Badge>
-                              {candidate.department && (
-                                <Badge variant="outline">
-                                  {candidate.department}
-                                </Badge>
-                              )}
-                              <Badge variant="secondary">
-                                Created: {formatDate(candidate.createdAt)}
-                              </Badge>
-                              <Badge variant="secondary">
-                                Last Login: {formatDate(candidate.lastLogin)}
-                              </Badge>
+                            <div className="text-sm text-muted-foreground">
+                              @{candidate.username} • {candidate.email}
                             </div>
                           </div>
 
-                          {/* Actions */}
-                          <div className="flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleViewCandidate(candidate)}
-                              className="gap-2"
-                            >
-                              <Eye className="w-4 h-4" />
-                              View
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleEditCandidate(candidate)}
-                              className="gap-2"
-                            >
-                              <Edit className="w-4 h-4" />
-                              Edit
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleToggleStatus(candidate)}
-                              title={
-                                candidate.status === "active"
-                                  ? "Deactivate candidate"
-                                  : "Activate candidate"
-                              }
-                            >
-                              {candidate.status === "active" ? (
-                                <UserX className="w-4 h-4" />
-                              ) : (
-                                <UserCheck className="w-4 h-4" />
-                              )}
-                            </Button>
-                            {candidate.role === "candidate" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleChangeRole(candidate)}
-                                title="Make Admin"
-                              >
-                                <Shield className="w-4 h-4" />
-                              </Button>
+                          {/* Metadata */}
+                          <div className="flex flex-wrap gap-2">
+                            <Badge className={getRoleColor(candidate.role)}>
+                              {candidate.role === "admin" ? "Admin" : "Candidate"}
+                            </Badge>
+                            <Badge className={getStatusColor(candidate.status)}>
+                              {candidate.status.charAt(0).toUpperCase() +
+                                candidate.status.slice(1)}
+                            </Badge>
+                            {candidate.department && (
+                              <Badge variant="outline">
+                                {candidate.department}
+                              </Badge>
                             )}
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteCandidate(candidate)}
-                              className="text-destructive gap-2"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete
-                            </Button>
+                            <Badge variant="secondary">
+                              Created: {formatDate(candidate.createdAt)}
+                            </Badge>
+                            <Badge variant="secondary">
+                              Last Login: {formatDate(candidate.lastLogin)}
+                            </Badge>
                           </div>
                         </div>
+
+                        {/* Actions */}
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleViewCandidate(candidate)}
+                            className="gap-2"
+                          >
+                            <Eye className="w-4 h-4" />
+                            View
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditCandidate(candidate)}
+                            className="gap-2"
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleToggleStatus(candidate)}
+                            title={
+                              candidate.status === "active"
+                                ? "Deactivate candidate"
+                                : "Activate candidate"
+                            }
+                          >
+                            {candidate.status === "active" ? (
+                              <UserX className="w-4 h-4" />
+                            ) : (
+                              <UserCheck className="w-4 h-4" />
+                            )}
+                          </Button>
+                          {candidate.role === "candidate" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleChangeRole(candidate)}
+                              title="Make Admin"
+                            >
+                              <Shield className="w-4 h-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteCandidate(candidate)}
+                            className="text-destructive gap-2"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
